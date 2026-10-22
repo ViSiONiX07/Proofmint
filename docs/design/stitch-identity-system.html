@@ -1,0 +1,430 @@
+﻿<!DOCTYPE html>
+
+<html class="bg-[#171A1D] text-[#F5F5F0] antialiased" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Proofmint — Brand Identity System &amp; Design Standards</title>
+<!-- Tailwind CSS CDN with Forms & Container Queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration for Proofmint Design System -->
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            graphite: '#171A1D',
+            charcoal: '#242A2D',
+            mint: '#A7F3D0',
+            'mint-hover': '#86EFAC',
+            copper: '#F2A65A',
+            offwhite: '#F5F5F0',
+            hairline: 'rgba(245, 245, 240, 0.08)',
+            'hairline-light': 'rgba(23, 26, 29, 0.08)',
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"Segoe UI"', 'Roboto', 'sans-serif'],
+            mono: ['"SF Mono"', '"JetBrains Mono"', '"Fira Code"', 'monospace'],
+          },
+          letterSpacing: {
+            tighter: '-0.03em',
+            tight: '-0.02em',
+            widest: '0.08em',
+          }
+        }
+      }
+    }
+  </script>
+<!-- Typography and Custom Layout Styles -->
+<style data-purpose="custom-typography">
+    .tracking-label {
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 0.65rem;
+    }
+    .spec-grid-line {
+      background-image: linear-gradient(to right, rgba(167, 243, 208, 0.15) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(167, 243, 208, 0.15) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+    .technical-dots {
+      background-image: radial-gradient(rgba(245, 245, 240, 0.12) 1px, transparent 1px);
+      background-size: 12px 12px;
+    }
+  </style>
+</head>
+<body class="bg-graphite text-offwhite min-h-screen flex justify-center selection:bg-mint selection:text-graphite">
+<!-- Mobile Viewport Shell (390px mobile viewport representation) -->
+<div class="w-full max-w-[390px] border-x border-hairline flex flex-col bg-graphite relative pb-16">
+<!-- BEGIN: SystemHeader -->
+<header class="px-5 pt-8 pb-6 border-b border-hairline relative technical-dots" data-purpose="brand-system-header">
+<div class="flex items-center justify-between mb-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-charcoal border border-hairline text-[10px] font-mono tracking-label text-mint">
+<span class="w-1.5 h-1.5 rounded-full bg-mint animate-pulse"></span>
+          VISUAL IDENTITY SYSTEM
+        </span>
+<span class="text-[11px] font-mono text-offwhite/50 tracking-wider">v1.0.4 — HACKATHON</span>
+</div>
+<div class="space-y-1.5">
+<h1 class="text-2xl font-bold tracking-tight text-offwhite">proofmint</h1>
+<p class="text-[13px] leading-relaxed text-offwhite/70">
+          Enterprise AI brand-verification &amp; synthetic provenance infrastructure. Core geometry, metrology, and interface specs.
+        </p>
+</div>
+<!-- Quick Metadata Grid -->
+<div class="mt-4 pt-3 border-t border-hairline/60 grid grid-cols-2 gap-2 text-[10px] font-mono text-offwhite/60">
+<div>CORE ANCHOR: <span class="text-offwhite">Geometric 'P' Mark</span></div>
+<div>PALETTE: <span class="text-offwhite">Dual Accent System</span></div>
+</div>
+</header>
+<!-- END: SystemHeader -->
+<!-- BEGIN: Section1_LogoAnatomy -->
+<section class="p-5 border-b border-hairline space-y-5" data-purpose="logo-and-mark-anatomy">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-mint">01</span>
+<h2 class="text-xs font-mono tracking-label text-offwhite font-bold">LOGO &amp; MARK ANATOMY</h2>
+</div>
+<span class="text-[10px] font-mono text-offwhite/40">RATIO 1:3.6</span>
+</div>
+<!-- Dark Container Lockup (Primary) -->
+<div class="space-y-2">
+<div class="flex justify-between items-center text-[10px] font-mono text-offwhite/50">
+<span>VARIANT A — DARK GRAPHITE CANVAS</span>
+<span class="text-mint">#171A1D</span>
+</div>
+<div class="p-6 rounded-md bg-graphite border border-hairline flex flex-col items-center justify-center relative overflow-hidden group shadow-inner">
+<div class="absolute inset-0 spec-grid-line opacity-30 pointer-events-none"></div>
+<!-- Vector Proofmint Lockup -->
+<div class="flex items-center gap-3.5 z-10 py-2">
+<!-- Precise SVG Recreating 'P' Mark with Integrated Checkmark -->
+<svg class="w-8 h-8 shrink-0" fill="none" viewbox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+<!-- Outer stylized P/document boundary -->
+<path d="M8 8H26C28.2091 8 30 9.79086 30 12V22C30 24.2091 28.2091 26 26 26H16V34H12V12H8V8Z" fill="#A7F3D0"></path>
+<!-- Internal cutout and checkmark path -->
+<path d="M16 12H24C25.1046 12 26 12.8954 26 14V20C26 21.1046 25.1046 22 24 22H16V12Z" fill="#171A1D"></path>
+<path d="M14 18L18.5 22.5L28 13" stroke="#F5F5F0" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+</svg>
+<span class="text-[26px] font-bold tracking-tight text-offwhite lowercase select-none">proofmint</span>
+</div>
+</div>
+</div>
+<!-- Light Container Lockup (Inverted) -->
+<div class="space-y-2">
+<div class="flex justify-between items-center text-[10px] font-mono text-offwhite/50">
+<span>VARIANT B — OFF-WHITE CANVAS</span>
+<span class="text-offwhite/80">#F5F5F0</span>
+</div>
+<div class="p-6 rounded-md bg-offwhite border border-hairline-light flex flex-col items-center justify-center relative overflow-hidden">
+<!-- Vector Proofmint Lockup Light -->
+<div class="flex items-center gap-3.5 z-10 py-2">
+<svg class="w-8 h-8 shrink-0" fill="none" viewbox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+<path d="M8 8H26C28.2091 8 30 9.79086 30 12V22C30 24.2091 28.2091 26 26 26H16V34H12V12H8V8Z" fill="#171A1D"></path>
+<path d="M16 12H24C25.1046 12 26 12.8954 26 14V20C26 21.1046 25.1046 22 24 22H16V12Z" fill="#F5F5F0"></path>
+<path d="M14 18L18.5 22.5L28 13" stroke="#171A1D" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+</svg>
+<span class="text-[26px] font-bold tracking-tight text-graphite lowercase select-none">proofmint</span>
+</div>
+</div>
+</div>
+<!-- Standalone Mark & App Icon Exploration -->
+<div class="grid grid-cols-2 gap-3 pt-1">
+<!-- Standalone App Icon Tile -->
+<div class="p-4 rounded-md bg-charcoal border border-hairline flex flex-col items-center justify-center gap-3">
+<div class="w-14 h-14 rounded-xl bg-graphite border border-hairline flex items-center justify-center shadow-lg shadow-black/40">
+<svg class="w-8 h-8" fill="none" viewbox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+<path d="M8 8H26C28.2091 8 30 9.79086 30 12V22C30 24.2091 28.2091 26 26 26H16V34H12V12H8V8Z" fill="#A7F3D0"></path>
+<path d="M16 12H24C25.1046 12 26 12.8954 26 14V20C26 21.1046 25.1046 22 24 22H16V12Z" fill="#171A1D"></path>
+<path d="M14 18L18.5 22.5L28 13" stroke="#F5F5F0" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.2"></path>
+</svg>
+</div>
+<span class="text-[10px] font-mono tracking-label text-offwhite/60">APP TILE // 64PX</span>
+</div>
+<!-- Exclusion Zone / Clearspace Specs -->
+<div class="p-4 rounded-md bg-charcoal border border-hairline flex flex-col justify-between">
+<div>
+<div class="text-[10px] font-mono tracking-label text-mint mb-1">EXCLUSION ZONE</div>
+<p class="text-[11px] leading-tight text-offwhite/70">
+              Minimum clearspace is equal to <span class="font-mono text-offwhite font-bold">1.5x</span> of the glyph stem height.
+            </p>
+</div>
+<div class="border border-dashed border-mint/40 rounded p-1.5 flex items-center justify-center mt-2 bg-graphite/40">
+<span class="text-[10px] font-mono text-mint">|← 1.5x →|</span>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Section1_LogoAnatomy -->
+<!-- BEGIN: Section2_ColorSystem -->
+<section class="p-5 border-b border-hairline space-y-4" data-purpose="color-system-and-tokens">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-mint">02</span>
+<h2 class="text-xs font-mono tracking-label text-offwhite font-bold">COLOR SYSTEM &amp; TOKENS</h2>
+</div>
+<span class="text-[10px] font-mono text-offwhite/40">5 TOKENS</span>
+</div>
+<p class="text-[12px] text-offwhite/70">
+        Engineered for terminal clarity and accessibility contrast compliance.
+      </p>
+<!-- Token Stack -->
+<div class="space-y-2">
+<!-- Graphite -->
+<div class="p-2.5 rounded-md bg-charcoal border border-hairline flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded border border-hairline bg-[#171A1D]"></div>
+<div>
+<div class="text-[12px] font-bold text-offwhite">Graphite</div>
+<div class="text-[10px] font-mono text-offwhite/50">Base Background // Canvas</div>
+</div>
+</div>
+<div class="text-right font-mono">
+<div class="text-[11px] text-offwhite font-bold">#171A1D</div>
+<div class="text-[9px] text-mint">AAA 15.1:1</div>
+</div>
+</div>
+<!-- Charcoal -->
+<div class="p-2.5 rounded-md bg-charcoal border border-hairline flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded border border-hairline bg-[#242A2D]"></div>
+<div>
+<div class="text-[12px] font-bold text-offwhite">Charcoal</div>
+<div class="text-[10px] font-mono text-offwhite/50">Surface 01 // Container Tile</div>
+</div>
+</div>
+<div class="text-right font-mono">
+<div class="text-[11px] text-offwhite font-bold">#242A2D</div>
+<div class="text-[9px] text-mint">AA 11.4:1</div>
+</div>
+</div>
+<!-- Mint -->
+<div class="p-2.5 rounded-md bg-charcoal border border-hairline flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded border border-hairline bg-[#A7F3D0]"></div>
+<div>
+<div class="text-[12px] font-bold text-mint">Mint</div>
+<div class="text-[10px] font-mono text-offwhite/50">Primary Accent // Verified</div>
+</div>
+</div>
+<div class="text-right font-mono">
+<div class="text-[11px] text-mint font-bold">#A7F3D0</div>
+<div class="text-[9px] text-offwhite/80">CORE BRAND</div>
+</div>
+</div>
+<!-- Copper -->
+<div class="p-2.5 rounded-md bg-charcoal border border-hairline flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded border border-hairline bg-[#F2A65A]"></div>
+<div>
+<div class="text-[12px] font-bold text-copper">Copper</div>
+<div class="text-[10px] font-mono text-offwhite/50">Secondary // Attestation Alert</div>
+</div>
+</div>
+<div class="text-right font-mono">
+<div class="text-[11px] text-copper font-bold">#F2A65A</div>
+<div class="text-[9px] text-offwhite/80">DRIFT FLAG</div>
+</div>
+</div>
+<!-- Off-white -->
+<div class="p-2.5 rounded-md bg-charcoal border border-hairline flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded border border-hairline bg-[#F5F5F0]"></div>
+<div>
+<div class="text-[12px] font-bold text-offwhite">Off-white</div>
+<div class="text-[10px] font-mono text-offwhite/50">High-Contrast Text // Light Mode</div>
+</div>
+</div>
+<div class="text-right font-mono">
+<div class="text-[11px] text-offwhite font-bold">#F5F5F0</div>
+<div class="text-[9px] text-mint">WCAG 2.1 OK</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Section2_ColorSystem -->
+<!-- BEGIN: Section3_TypographicHierarchy -->
+<section class="p-5 border-b border-hairline space-y-4" data-purpose="typographic-specimens">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-mint">03</span>
+<h2 class="text-xs font-mono tracking-label text-offwhite font-bold">TYPOGRAPHIC METROLOGY</h2>
+</div>
+<span class="text-[10px] font-mono text-offwhite/40">SYSTEM SPEC</span>
+</div>
+<div class="space-y-4 bg-charcoal/60 rounded-md p-4 border border-hairline">
+<!-- Display Header -->
+<div class="space-y-1 pb-3 border-b border-hairline/60">
+<span class="text-[9px] font-mono text-mint tracking-wider">DISPLAY / H1 (-0.02EM)</span>
+<h3 class="text-xl font-bold tracking-tight text-offwhite leading-tight">
+            Cryptographic Proofs for Generative Brands
+          </h3>
+</div>
+<!-- Section Heading -->
+<div class="space-y-1 pb-3 border-b border-hairline/60">
+<span class="text-[9px] font-mono text-offwhite/50 tracking-wider">SECTION / H2 (SEMI-BOLD)</span>
+<h4 class="text-base font-semibold text-offwhite">
+            Immutable Asset Attestation Engine
+          </h4>
+</div>
+<!-- Body Text -->
+<div class="space-y-1 pb-3 border-b border-hairline/60">
+<span class="text-[9px] font-mono text-offwhite/50 tracking-wider">BODY / REGULAR (13PX / 1.5)</span>
+<p class="text-[13px] leading-relaxed text-offwhite/80">
+            Proofmint continuous monitoring matches published generative vector matrices against registered enterprise IP hashes in real-time.
+          </p>
+</div>
+<!-- Monospace Hash / Metadata -->
+<div class="space-y-1">
+<span class="text-[9px] font-mono text-copper tracking-wider">METADATA / CODE (JETBRAINS / SF MONO)</span>
+<div class="p-2.5 rounded bg-graphite border border-hairline font-mono text-[11px] text-mint break-all select-all">
+            PROOF_SHA256: 9e107d9d372bb6826bd81d3542a419d6verified: true
+          </div>
+</div>
+</div>
+</section>
+<!-- END: Section3_TypographicHierarchy -->
+<!-- BEGIN: Section4_DocumentCover -->
+<section class="p-5 border-b border-hairline space-y-4" data-purpose="submission-document-cover">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-mint">04</span>
+<h2 class="text-xs font-mono tracking-label text-offwhite font-bold">SUBMISSION DOSSIER COVER</h2>
+</div>
+<span class="text-[10px] font-mono text-copper">ROUND 1</span>
+</div>
+<!-- Dossier Card Frame -->
+<article class="p-6 rounded-lg bg-gradient-to-b from-[#1E2226] to-graphite border border-hairline relative overflow-hidden shadow-2xl">
+<!-- Top Hairline Grid Matrix Decorator -->
+<div class="absolute top-0 right-0 w-32 h-32 spec-grid-line opacity-20 pointer-events-none"></div>
+<div class="flex justify-between items-start mb-10">
+<!-- Logo Lockup Small -->
+<div class="flex items-center gap-2">
+<svg class="w-5 h-5 shrink-0" fill="none" viewbox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+<path d="M8 8H26C28.2091 8 30 9.79086 30 12V22C30 24.2091 28.2091 26 26 26H16V34H12V12H8V8Z" fill="#A7F3D0"></path>
+<path d="M16 12H24C25.1046 12 26 12.8954 26 14V20C26 21.1046 25.1046 22 24 22H16V12Z" fill="#171A1D"></path>
+<path d="M14 18L18.5 22.5L28 13" stroke="#F5F5F0" stroke-linecap="round" stroke-width="3"></path>
+</svg>
+<span class="text-sm font-bold tracking-tight text-offwhite lowercase">proofmint</span>
+</div>
+<span class="px-2 py-0.5 rounded-sm bg-copper/10 border border-copper/30 text-[9px] font-mono text-copper font-semibold tracking-wider">
+            CONFIDENTIAL // SUBMITTED
+          </span>
+</div>
+<div class="space-y-2 mb-8">
+<div class="text-[10px] font-mono text-mint tracking-widest uppercase">SPECIFICATION WHITE PAPER</div>
+<h3 class="text-lg font-bold text-offwhite leading-tight uppercase tracking-tight">
+            ROUND 1: TECHNICAL ARCHITECTURE &amp; HACKATHON SUBMISSION
+          </h3>
+<p class="text-xs text-offwhite/60 leading-normal">
+            Verifiable AI Asset Provenance &amp; Synthetic Brand Protection Framework.
+          </p>
+</div>
+<!-- Dossier Footer Attributes -->
+<div class="pt-4 border-t border-hairline grid grid-cols-2 gap-3 text-[10px] font-mono text-offwhite/60">
+<div>
+<div class="text-offwhite/40 text-[9px]">DOSSIER ID</div>
+<div class="text-offwhite font-bold">PM-HACK-2025-R1</div>
+</div>
+<div>
+<div class="text-offwhite/40 text-[9px]">ENGINE PROTOCOL</div>
+<div class="text-mint font-bold">SHA256-ZERO-PROOF</div>
+</div>
+</div>
+</article>
+</section>
+<!-- END: Section4_DocumentCover -->
+<!-- BEGIN: Section5_ProductDashboard -->
+<section class="p-5 space-y-4" data-purpose="enterprise-compliance-dashboard">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono text-mint">05</span>
+<h2 class="text-xs font-mono tracking-label text-offwhite font-bold">ENTERPRISE COMPLIANCE INTERFACE</h2>
+</div>
+<span class="text-[10px] font-mono text-mint">LIVE AUDIT</span>
+</div>
+<!-- Live Product Shell Mockup -->
+<div class="rounded-lg bg-charcoal border border-hairline overflow-hidden shadow-2xl">
+<!-- Mock App Navigation Bar -->
+<nav aria-label="Dashboard Application Bar" class="px-4 py-3 bg-graphite border-b border-hairline flex items-center justify-between">
+<div class="flex items-center gap-2">
+<svg class="w-5 h-5 shrink-0" fill="none" viewbox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+<path d="M8 8H26C28.2091 8 30 9.79086 30 12V22C30 24.2091 28.2091 26 26 26H16V34H12V12H8V8Z" fill="#A7F3D0"></path>
+<path d="M16 12H24C25.1046 12 26 12.8954 26 14V20C26 21.1046 25.1046 22 24 22H16V12Z" fill="#171A1D"></path>
+<path d="M14 18L18.5 22.5L28 13" stroke="#F5F5F0" stroke-linecap="round" stroke-width="3"></path>
+</svg>
+<span class="text-xs font-bold tracking-tight text-offwhite lowercase">proofmint</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-mint/10 border border-mint/20 text-[9px] font-mono text-mint">
+<span class="w-1.5 h-1.5 rounded-full bg-mint"></span>
+              LIVE
+            </span>
+<div class="w-6 h-6 rounded-full bg-graphite border border-hairline flex items-center justify-center text-[10px] font-mono text-offwhite/80 font-semibold">
+              PM
+            </div>
+</div>
+</nav>
+<!-- Compliance Review Content Card -->
+<div class="p-4 space-y-4">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-[9px] font-mono tracking-label text-offwhite/50">MONITORED ASSET</span>
+<div class="text-sm font-bold text-offwhite font-mono mt-0.5">Acme_Vector_Mark_v4.svg</div>
+</div>
+<span class="px-2 py-0.5 rounded bg-graphite border border-hairline text-[10px] font-mono text-offwhite/60">
+              AUDIT #7829
+            </span>
+</div>
+<!-- Dual Telemetry Status Badges -->
+<div class="grid grid-cols-2 gap-2">
+<!-- Score Card -->
+<div class="p-2.5 rounded bg-graphite border border-hairline">
+<span class="text-[9px] font-mono text-offwhite/50 block mb-1">AUTHENTICITY</span>
+<div class="text-base font-bold text-mint font-mono">99.4%</div>
+<span class="text-[9px] text-mint/80 font-mono">VERIFIED ANCHOR</span>
+</div>
+<!-- Drift Card -->
+<div class="p-2.5 rounded bg-graphite border border-hairline">
+<span class="text-[9px] font-mono text-offwhite/50 block mb-1">SYNTHETIC DRIFT</span>
+<div class="text-base font-bold text-copper font-mono">0.06%</div>
+<span class="text-[9px] text-copper/80 font-mono">ALERT: TOLERANCE OK</span>
+</div>
+</div>
+<!-- Cryptographic Hash Anchor Details -->
+<div class="p-2.5 rounded bg-graphite/70 border border-hairline space-y-1">
+<div class="flex justify-between items-center text-[9px] font-mono text-offwhite/50">
+<span>LEDGER ANCHOR</span>
+<span class="text-mint">CONSENSUS SEALED</span>
+</div>
+<div class="text-[10px] font-mono text-offwhite/80 truncate">
+              BLOCK #481029 // 0x8F3a92C8b41E92d3A2B0
+            </div>
+</div>
+<!-- Action Buttons Form Factor -->
+<div class="space-y-2 pt-1">
+<button class="w-full py-2.5 px-3 rounded bg-mint hover:bg-mint-hover text-graphite font-bold text-xs font-mono transition-colors flex items-center justify-center gap-2 active:scale-[0.99]" data-purpose="audit-cert-download" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+              DOWNLOAD AUDIT CERTIFICATE
+            </button>
+<button class="w-full py-2.5 px-3 rounded bg-graphite hover:bg-graphite/80 border border-hairline text-offwhite font-mono text-xs transition-colors flex items-center justify-center gap-2" data-purpose="provenance-tree-inspect" type="button">
+<svg class="w-3.5 h-3.5 text-mint" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+              INSPECT PROVENANCE TREE
+            </button>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Section5_ProductDashboard -->
+<!-- BEGIN: Footer -->
+<footer class="px-5 pt-4 text-center border-t border-hairline" data-purpose="brand-system-footer">
+<div class="text-[10px] font-mono text-offwhite/40 space-y-1">
+<div>PROOFMINT INC. // ALL RIGHTS RESERVED</div>
+<div class="text-offwhite/20">SYSTEM STACK: TAILWIND V3 // SVGs // MOBILE IOS SPEC</div>
+</div>
+</footer>
+<!-- END: Footer -->
+</div>
+</body></html>

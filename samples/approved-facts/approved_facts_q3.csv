@@ -1,0 +1,5 @@
+fact_id,claim_type,approved_statement,source_document,page_span,verified_date,status
+FACT-001,availability,99.99% targeted availability worldwide,Core_SLA_Master_Annex_2024.pdf,p12,2025-01-15,VERIFIED
+FACT-002,performance,delivers 10x speed relative to legacy single-node clusters,Benchmark_Audit_Report_2024.pdf,p4,2025-02-01,VERIFIED
+FACT-003,architecture,purpose-built distributed architecture,System_Architecture_Overview.pdf,p2,2025-01-10,VERIFIED
+FACT-004,compliance,SOC-2 Type II and ISO 27001 audited,Security_Compliance_Brief_2024.pdf,p8,2025-01-20,VERIFIED

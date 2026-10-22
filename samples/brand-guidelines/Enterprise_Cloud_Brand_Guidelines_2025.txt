@@ -1,0 +1,17 @@
+# ACME CLOUD ENTERPRISE BRAND GUIDELINES (VERSION 4.2 - 2025)
+
+## 1. UPTIME & RELIABILITY CLAIMS (RULE SEC-402)
+- All representations of system availability must adhere strictly to the published SLA Schedule.
+- Absolute representations such as "100% zero-downtime guaranteed", "always up", or "zero outage" are prohibited under FTC 16 CFR § 255.
+- Permitted phraseology: "99.99% targeted availability worldwide" or "designed for 99.99% multi-region SLA availability".
+- Citation Requirement: Link directly to Core_SLA_Master_Annex_2024.pdf#p12.
+
+## 2. TONE & VOCABULARY STANDARDS (RULE STY-108)
+- Avoid unmeasured superlatives, tech cliches, and hyperbole:
+  - Do not use: "revolutionary", "game-changing", "magical", "disruptive".
+  - Use measured descriptors: "purpose-built distributed architecture", "specialized orchestration", "verified engine".
+- Maintain clear technical authority.
+
+## 3. REGULATORY COMPLIANCE & ESG (RULE REG-301)
+- Efficiency claims: Energy reduction metrics exceeding 30% must accompany baseline measurement methodology certified by a third-party audit within the rolling 12 months.
+- AI transparency: AI-generated features must provide notice under EU AI Act Art. 50.
