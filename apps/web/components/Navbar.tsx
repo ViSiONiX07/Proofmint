@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BrandLogo } from "./BrandLogo";
-import { UserRound, X } from "lucide-react";
+import { Menu, UserRound, X } from "lucide-react";
 
 interface NavbarProps {
   onOpenWorkspace?: () => void;
@@ -10,7 +12,7 @@ interface NavbarProps {
   setActiveView?: (view: "landing" | "workspace") => void;
 }
 
-export function Navbar({ onOpenWorkspace, activeView = "landing", setActiveView }: NavbarProps) {
+function LegacyNavbar({ onOpenWorkspace, activeView = "landing", setActiveView }: NavbarProps) {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -217,4 +219,41 @@ export function Navbar({ onOpenWorkspace, activeView = "landing", setActiveView 
       )}
     </header>
   );
+}
+
+const routeLinks = [
+  { href: "/", label: "Overview & Telemetry" },
+  { href: "/brand-workspace", label: "Brand Workspace" },
+  { href: "/differentiators", label: "Differentiators" },
+  { href: "/pipeline", label: "Pipeline" },
+  { href: "/trust", label: "Sovereign Trust" },
+];
+
+export function Navbar() {
+  const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setMenuOpen(false); setAccountOpen(false); }, [pathname]);
+  useEffect(() => {
+    const oldOverflow = document.body.style.overflow;
+    if (menuOpen) document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = oldOverflow; };
+  }, [menuOpen]);
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setMenuOpen(false); setAccountOpen(false); } };
+    const handleOutside = (event: MouseEvent) => { if (accountRef.current && !accountRef.current.contains(event.target as Node)) setAccountOpen(false); };
+    document.addEventListener("keydown", handleKey); document.addEventListener("mousedown", handleOutside);
+    return () => { document.removeEventListener("keydown", handleKey); document.removeEventListener("mousedown", handleOutside); };
+  }, []);
+  return <header className="fixed inset-x-0 top-0 z-50 border-b border-border-structural bg-graphite-base/95 backdrop-blur-md">
+    <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-12">
+      <Link href="/" className="group rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-verification-mint"><BrandLogo size="md" /></Link>
+      <nav aria-label="Primary" className="hidden items-center gap-5 xl:flex">{routeLinks.map((link) => <Link key={link.href} href={link.href} className={`border-b py-1 text-sm transition-colors ${pathname === link.href ? "border-verification-mint text-off-white" : "border-transparent text-secondary hover:text-off-white"}`}>{link.label}</Link>)}</nav>
+      <div className="hidden items-center gap-3 xl:flex"><Link href="/brand-workspace" className="rounded border border-border-structural px-4 py-2 text-xs font-semibold text-off-white hover:border-verification-mint hover:text-verification-mint">Brand Workspace</Link><Link href="/studio" className="rounded bg-verification-mint px-4 py-2 text-xs font-semibold text-graphite-base hover:brightness-105">Launch Studio</Link><div className="relative" ref={accountRef}><button type="button" onClick={() => setAccountOpen((open) => !open)} aria-label="Account menu" aria-expanded={accountOpen} className="flex h-9 w-9 items-center justify-center rounded-full border border-border-structural text-off-white hover:border-verification-mint"><UserRound className="h-4 w-4" /></button>{accountOpen && <div role="menu" className="absolute right-0 mt-2 w-48 rounded border border-border-structural bg-charcoal-elevated p-2 shadow-xl"><p className="border-b border-border-structural px-3 py-2 text-xs text-secondary">Account features are not connected.</p><button type="button" role="menuitem" onClick={() => { window.dispatchEvent(new Event("proofmint:restart-tour")); setAccountOpen(false); }} className="w-full px-3 py-2 text-left text-sm text-off-white hover:bg-charcoal-subtle">Restart Tour</button></div>}</div></div>
+      <button type="button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} className="rounded p-2 text-secondary hover:text-off-white focus:outline-none focus-visible:ring-2 focus-visible:ring-verification-mint xl:hidden">{menuOpen ? <X /> : <Menu />}</button>
+    </div>
+    {menuOpen && <div className="fixed inset-x-0 top-16 h-[calc(100dvh-4rem)] overflow-y-auto border-t border-border-structural bg-graphite-base px-6 py-8 xl:hidden"><nav aria-label="Mobile primary" className="flex flex-col gap-1">{routeLinks.map((link) => <Link key={link.href} href={link.href} className={`border-b border-border-structural py-4 text-lg ${pathname === link.href ? "text-verification-mint" : "text-secondary hover:text-off-white"}`}>{link.label}</Link>)}</nav><div className="mt-8 flex flex-col gap-3"><Link href="/brand-workspace" className="rounded border border-border-structural px-4 py-3 text-center text-sm font-semibold text-off-white">Brand Workspace</Link><Link href="/studio" className="rounded bg-verification-mint px-4 py-3 text-center text-sm font-semibold text-graphite-base">Launch Studio</Link><button type="button" onClick={() => { window.dispatchEvent(new Event("proofmint:restart-tour")); setMenuOpen(false); }} className="border border-border-structural px-4 py-3 text-sm text-off-white">Restart Tour</button></div></div>}
+  </header>;
 }
