@@ -26,6 +26,9 @@ This document records the core third-party packages used across the Proofmint mo
 | `fastapi` | Modern asynchronous web framework | High-performance Python REST API with automatic OpenAPI documentation. |
 | `pydantic` | Data validation and serialization | Runtime schema enforcement for findings, evidence, and audit telemetry. |
 | `pydantic-settings` | Environment settings management | Type-safe configuration loaded from `.env`. |
+| `SQLAlchemy` | PostgreSQL ORM and session management | Typed declarative models and lazy, request-scoped sessions. |
+| `alembic` | Database migrations | Versioned PostgreSQL schema changes with a checked-in baseline migration. |
+| `psycopg[binary]` | PostgreSQL driver | PostgreSQL connectivity for SQLAlchemy and Alembic using Psycopg 3. |
 | `uvicorn` | ASGI web server | Production-grade asynchronous server for FastAPI. |
 | `httpx` | Asynchronous HTTP client | Test client for ASGI applications (`ASGITransport`). |
 | `pytest` & `pytest-asyncio` | Automated testing framework | Unit and integration testing for API endpoints. |

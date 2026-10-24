@@ -1,18 +1,9 @@
-import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-jakarta",
-  display: "swap",
-});
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-});
+import { Footer } from "@/components/Footer";
+import { Navbar } from "@/components/Navbar";
+import { WelcomeModal } from "@/components/WelcomeModal";
+import { ScrollRevealObserver } from "@/components/ScrollRevealObserver";
 
 export const metadata: Metadata = {
   title: "Proofmint — Nothing Ships Unproven | AI Brand Verification Workspace",
@@ -28,7 +19,11 @@ export const metadata: Metadata = {
     "Regulatory Compliance",
   ],
   authors: [{ name: "Proofmint Team" }],
-  viewport: "width=device-width, initial-scale=1",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -42,9 +37,13 @@ export default function RootLayout({
         <link rel="icon" href="/icon.svg" sizes="any" />
       </head>
       <body
-        className={`${jakarta.variable} ${mono.variable} bg-graphite-base text-on-surface antialiased selection:bg-verification-mint selection:text-graphite-base`}
+        className="bg-graphite-base text-on-surface antialiased selection:bg-verification-mint selection:text-graphite-base"
       >
+        <Navbar />
+        <ScrollRevealObserver />
         {children}
+        <Footer />
+        <WelcomeModal />
       </body>
     </html>
   );

@@ -17,11 +17,13 @@ proofmint/
 │       ├── app/
 │       │   ├── api/           # Health and REST routes
 │       │   ├── core/          # Pydantic Settings & environment config
-│       │   ├── models/        # Database model stubs (PostgreSQL)
+│       │   ├── models/        # SQLAlchemy PostgreSQL models
 │       │   ├── schemas/       # Findings, Evidence, and Decision schemas
 │       │   ├── services/      # Service layer
 │       │   └── main.py        # ASGI application entrypoint
-│       └── tests/             # Pytest suite
+│       ├── alembic/           # Versioned PostgreSQL migrations
+│       ├── tests/             # Pytest suite
+│       └── README.md          # PostgreSQL setup and migration commands
 ├── docs/
 │   ├── architecture/          # Architecture blueprints
 │   ├── design/                # Retrieved Stitch designs, SVG logos, and DESIGN_SYSTEM.md
@@ -103,8 +105,8 @@ pytest
 | **Guidelines & Facts Management** | ✅ Complete (UI/Interactive) | Document ingestion simulator, candidate rules, and CSV facts preview |
 | **Scroll-Triggered CSS Animations** | ✅ Complete | GPU-accelerated CSS reveals and Intersection Observer triggers; zero Framer Motion |
 | **Responsive Layouts** | ✅ Complete | Tested for 1440×900 (Desktop), 1280×800 (Laptop), 390×844 (Mobile) |
-| **Real PDF Parsing Engine** | ⏳ Later Phase | PyMuPDF pipeline will be implemented in subsequent Codex phase |
-| **Live Database Persistence** | ⏳ Later Phase | PostgreSQL schemas prepared; no live database required for frontend |
+| **PDF Text Extraction** | ✅ Foundation Complete | Bounded PyMuPDF ingestion with page-level text and source spans; guideline metadata is persisted, with no OCR or PDF binary storage |
+| **PostgreSQL Persistence Foundation** | ✅ Schema Ready | SQLAlchemy models, lazy session management, and Alembic baseline; configure PostgreSQL before applying migrations |
 | **Production LLM Engine** | ⏳ Later Phase | LLM provider agnostic interface planned for subsequent phase |
 
 ---
@@ -114,3 +116,5 @@ pytest
 - Zero-retention cloud architecture designed for confidential enterprise copy.
 - Ephemeral in-memory verification.
 - Human review is strictly mandatory before clearance.
+
+For local PostgreSQL configuration and migration commands, see [services/api/README.md](services/api/README.md).

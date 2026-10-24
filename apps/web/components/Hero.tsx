@@ -1,10 +1,7 @@
 import React from "react";
+import Link from "next/link";
 
-interface HeroProps {
-  onOpenWorkspace?: () => void;
-}
-
-export function Hero({ onOpenWorkspace }: HeroProps) {
+export function Hero() {
   return (
     <section className="relative w-full pt-20 pb-20 md:pt-28 md:pb-28 overflow-hidden bg-graphite-base border-b border-border-structural" id="overview">
       {/* Ambient architectural grid background */}
@@ -42,26 +39,25 @@ export function Hero({ onOpenWorkspace }: HeroProps) {
 
         {/* Dual Action CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto mb-16">
-          <a
-            href="#simulator"
+          <Link
+            href="/studio"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-lg bg-verification-mint text-graphite-base font-sans text-sm font-semibold hover:brightness-105 hover:shadow-mint-glow transition-all active:scale-[0.99]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
-            Explore Interactive Verification
-          </a>
+            See a sample review
+          </Link>
 
-          <button
-            type="button"
-            onClick={onOpenWorkspace}
+          <Link
+            href="/brand-workspace"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-lg bg-charcoal-elevated text-off-white border border-border-structural font-sans text-sm font-medium hover:border-verification-mint/50 hover:text-verification-mint transition-all"
           >
             <svg className="w-5 h-5 text-verification-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Open Brand Workspace Hub
-          </button>
+            Open brand workspace
+          </Link>
         </div>
 
         {/* Trust Assurance Strip */}

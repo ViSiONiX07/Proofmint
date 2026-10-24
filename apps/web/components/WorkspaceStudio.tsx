@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import React, { useState, useEffect, useRef, ChangeEvent, useCallback } from "react";
 
 type WorkspaceTab = "guidelines" | "facts" | "submission" | "findings" | "ledger";
 
@@ -194,23 +196,24 @@ export function WorkspaceStudio() {
               </div>
 
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => alert("Simulation Notice: Real PyMuPDF ingestion engine will be connected during the subsequent Codex phase.")}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-verification-mint text-graphite-base font-sans text-xs font-semibold hover:brightness-105 transition-all"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  Upload Guidelines PDF (Sample)
-                </button>
+                <Link href="/studio">
+  <button
+    type="button"
+    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-verification-mint text-graphite-base font-sans text-xs font-semibold hover:brightness-105 transition-all"
+  >
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+    </svg>
+    Open Launch Studio to upload guidelines
+  </button>
+</Link>
               </div>
             </div>
 
             {/* Extracted Rules Matrix */}
             <div className="bg-charcoal-elevated rounded-xl border border-border-structural overflow-hidden">
               <div className="p-4 border-b border-border-structural flex items-center justify-between font-mono text-xs text-secondary">
-                <span>EXTRACTED_BRAND_RULES ({rules.length})</span>
+                <span>Illustrative Sample Rules ({rules.length})</span>
                 <span>HUMAN_APPROVAL_GATED</span>
               </div>
 
