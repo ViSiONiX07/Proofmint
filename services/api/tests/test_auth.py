@@ -1,6 +1,6 @@
 import asyncio
 from http.cookies import SimpleCookie
-import json
+import json as json_module
 from urllib.parse import urlsplit
 
 import pytest
@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.auth import _hash_password, _verify_password, normalize_email, _attempts
 from app.core.database import get_db_session
+from app.api.workspaces import get_workspace_session
 from app.main import app
 from app.models import Base
 from app.models.identity import AuthSession, User
@@ -24,7 +25,7 @@ class LocalResponse:
         self.text = body.decode("utf-8", "replace")
 
     def json(self):
-        return json.loads(self.content)
+        return json_module.loads(self.content)
 
 
 class LocalAsgiClient:
@@ -34,14 +35,18 @@ class LocalAsgiClient:
         self.app = asgi_app
         self.cookies = {}
 
-    def request(self, method, url, *, json_body=None, headers=None):
+    def request(self, method, url, *, json_body=None, json=None, headers=None):
+        if json_body is not None and json is not None:
+            raise TypeError("Pass only one of json_body or json")
+        if json is not None:
+            json_body = json
         parsed = urlsplit(url)
         request_headers = {key.lower(): value for key, value in (headers or {}).items()}
         request_headers.setdefault("host", "testserver")
         if json_body is None:
             body = b""
         else:
-            body = json.dumps(json_body).encode()
+            body = json_module.dumps(json_body).encode()
             request_headers.setdefault("content-type", "application/json")
             request_headers["content-length"] = str(len(body))
         if self.cookies:
@@ -61,9 +66,7 @@ class LocalAsgiClient:
 
         path = parsed.path or "/"
         scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1", "method": method.upper(), "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": parsed.query.encode(), "root_path": "", "headers": [(key.encode(), value.encode()) for key, value in request_headers.items()], "client": ("127.0.0.1", 32100), "server": ("testserver", 80), "state": {}}
-        print("calling asgi", method, path, flush=True)
         asyncio.run(self.app(scope, receive, send))
-        print("asgi done", flush=True)
         start = next(item for item in messages if item["type"] == "http.response.start")
         payload = b"".join(item.get("body", b"") for item in messages if item["type"] == "http.response.body")
         output_headers = {key.decode().lower(): value.decode() for key, value in start.get("headers", []) if key.lower() != b"set-cookie"}
@@ -95,6 +98,7 @@ def auth_client(monkeypatch, tmp_path):
             yield session
 
     app.dependency_overrides[get_db_session] = override_session
+    app.dependency_overrides[get_workspace_session] = override_session
     client = LocalAsgiClient(app)
     yield client, factory
     client.close()
@@ -156,7 +160,11 @@ def test_users_cannot_read_other_users_workspaces_and_judges_are_confined(auth_c
     assert started.status_code == 200, started.text
     assert started.json()["label"] == "Judge — Demonstration Access"
     demo_workspace = started.json()["workspace_id"]
-    assert judge.get(f"/api/v1/workspaces/{demo_workspace}").status_code == 200
+    workspace_response = judge.get(f"/api/v1/workspaces/{demo_workspace}")
+    assert workspace_response.status_code == 200
+    workspace_body = workspace_response.json()
+    assert workspace_body["documents"] == []
+    assert workspace_body["latest_audit_id"] is None
     assert judge.get(f"/api/v1/workspaces/{workspace_a_id}").status_code == 404
     assert client_a.get(f"/api/v1/workspaces/{demo_workspace}").status_code == 404
     data = judge.get("/api/v1/auth/me").json()
@@ -186,3 +194,35 @@ def test_google_sign_in_fails_closed_without_provider_configuration(auth_client,
     response = client.get("/api/v1/auth/google/start")
     assert response.status_code == 503
     assert "not configured" in response.json()["detail"]
+
+
+def test_workspace_authorization_supports_path_and_query_contexts_and_fails_closed(auth_client):
+    owner_client, factory = auth_client
+    assert register(owner_client, "owner@example.test").status_code == 201
+    with factory() as db:
+        owner = db.query(User).filter_by(email="owner@example.test").one()
+        owner_workspace = Workspace(kind="session", owner_user_id=owner.id)
+        db.add(owner_workspace)
+        db.commit()
+        owner_workspace_id = owner_workspace.id
+
+    other_client = LocalAsgiClient(app)
+    assert register(other_client, "other@example.test").status_code == 201
+    assert owner_client.get(f"/api/v1/workspaces/{owner_workspace_id}").status_code == 200
+    assert other_client.get(f"/api/v1/workspaces/{owner_workspace_id}").status_code == 404
+    assert owner_client.get(f"/api/v1/guidelines/not-a-uuid/rules?workspace_id={owner_workspace_id}").status_code in {404, 422}
+    assert owner_client.get("/api/v1/workspaces/not-a-uuid").status_code == 404
+
+    judge_a = LocalAsgiClient(app)
+    judge_b = LocalAsgiClient(app)
+    started_a = judge_a.post("/api/v1/auth/judge")
+    started_b = judge_b.post("/api/v1/auth/judge")
+    assert started_a.status_code == started_b.status_code == 200
+    workspace_a = started_a.json()["workspace_id"]
+    workspace_b = started_b.json()["workspace_id"]
+    assert judge_a.get(f"/api/v1/workspaces/{workspace_a}").status_code == 200
+    assert judge_b.get(f"/api/v1/workspaces/{workspace_a}").status_code == 404
+    assert judge_a.get(f"/api/v1/guidelines/not-a-uuid/rules?workspace_id={workspace_a}").status_code in {404, 422}
+    unauthenticated = LocalAsgiClient(app)
+    assert unauthenticated.get(f"/api/v1/workspaces/{workspace_a}").status_code == 401
+    assert workspace_a != workspace_b

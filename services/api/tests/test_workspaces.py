@@ -18,6 +18,7 @@ from app.api.workspaces import get_workspace_session
 from app.core.config import settings
 from app.main import app
 from app.models import Base, ImportedFact, Workspace
+from tests.auth_fixtures import install_authenticated_user, remove_authenticated_user
 
 
 def _pdf() -> bytes:
@@ -62,6 +63,7 @@ async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_da
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            install_authenticated_user(engine, client)
             first_upload = await client.post("/api/v1/guidelines/ingest", files={"files": ("same.pdf", _pdf(), "application/pdf")})
             second_upload = await client.post("/api/v1/guidelines/ingest", files={"files": ("same.pdf", _pdf(), "application/pdf")})
             assert first_upload.status_code == second_upload.status_code == 200
@@ -153,6 +155,7 @@ async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_da
         with Session(engine) as session:
             assert session.get(ImportedFact, legacy_fact_id).approved_statement == "Legacy-only evidence."
     finally:
+        remove_authenticated_user(engine)
         for dependency in dependencies:
             app.dependency_overrides.pop(dependency, None)
         Base.metadata.drop_all(engine)

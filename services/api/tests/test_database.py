@@ -104,7 +104,7 @@ def test_alembic_config_discovers_baseline_without_database_credentials():
     config = Config(str(config_path))
     script = ScriptDirectory.from_config(config)
     assert config.get_main_option("sqlalchemy.url") == ""
-    assert script.get_heads() == ["0008_persisted_repair_decisions"]
+    assert script.get_heads() == ["0009_auth_users_sessions"]
     revision = script.get_revision("0001_postgresql_persistence")
     assert revision is not None
     assert revision.down_revision is None

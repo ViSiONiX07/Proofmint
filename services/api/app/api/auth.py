@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 import base64
 import hashlib
 import hmac
-from io import BytesIO
 import re
 import secrets
 import threading
@@ -14,9 +13,6 @@ from urllib.parse import urlencode
 from uuid import UUID
 
 import httpx
-import pymupdf
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen.canvas import Canvas
 try:
     from argon2 import PasswordHasher
     from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
@@ -34,11 +30,8 @@ from sqlalchemy.orm import Session
 from app.core.auth import CSRF_COOKIE, SESSION_COOKIE, Principal, digest, get_principal, new_secret, require_csrf
 from app.core.config import settings
 from app.core.database import get_db_session
-from app.models.guideline import CandidateRule, GuidelineDocument
 from app.models.identity import AuthSession, OAuthState, User
-from app.models.imports import ImportedTerm
 from app.models.workspace import Workspace
-from app.services.source_document_store import SourceDocumentStore, page_text
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 _attempts: dict[str, deque[float]] = defaultdict(deque)
@@ -199,26 +192,6 @@ def judge_mode(response: Response, db: Session = Depends(get_db_session)):
     judge, session_data = _issue_session(response, db, user=None, role="judge", ttl=timedelta(hours=2))
     workspace = Workspace(kind="judge_demo", owner_judge_session_id=judge.id)
     db.add(workspace)
-    db.flush()
-    rule_text = "Use the approved product name Northstar Cloud in all marketing copy."
-    pdf_buffer = BytesIO()
-    canvas = Canvas(pdf_buffer, pagesize=letter)
-    canvas.setTitle("Proofmint Judge Demonstration Guidelines")
-    canvas.drawString(72, 720, "Proofmint Judge Demonstration Guidelines")
-    canvas.drawString(72, 680, rule_text)
-    canvas.save()
-    pdf_data = pdf_buffer.getvalue()
-    digest_pdf = hashlib.sha256(pdf_data).hexdigest()
-    with pymupdf.open(stream=pdf_data, filetype="pdf") as parsed:
-        extracted = page_text(parsed[0])
-        rule_start = extracted.index(rule_text)
-        page_count = parsed.page_count
-    document = GuidelineDocument(workspace_id=workspace.id, source_filename="Proofmint_Demo_Guidelines.pdf", source_sha256=digest_pdf, file_size_bytes=len(pdf_data), page_count=page_count)
-    db.add(document)
-    db.flush()
-    SourceDocumentStore().retain(workspace.id, document.id, digest_pdf, pdf_data)
-    db.add(CandidateRule(document_id=document.id, rule_text=rule_text, category="terminology", source_page=1, source_start_offset=rule_start, source_end_offset=rule_start + len(rule_text), source_excerpt=rule_text, review_status="approved"))
-    db.add(ImportedTerm(workspace_id=workspace.id, term="NorthStarCloud", preferred_form="Northstar Cloud", category="product_name", usage_notes="Curated judge demonstration mapping.", source_filename="Proofmint_Demo_Terminology.csv", source_row_number=2, source_sha256="f" * 64, review_status="approved"))
     db.commit()
     return {"role": "judge", "label": "Judge — Demonstration Access", "workspace_id": str(workspace.id), "session": session_data}
 

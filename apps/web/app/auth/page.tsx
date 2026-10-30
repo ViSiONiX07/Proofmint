@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { apiFetch, setApiCsrfToken } from "../../lib/api-fetch";
 import { clearActiveWorkspace, saveActiveWorkspace } from "../../lib/workspace-session.mjs";
 import { clearWorkflowSession } from "../../lib/workflow-session.mjs";
+import { API_BASE } from "../../lib/api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const GOOGLE_AUTH_ENABLED = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
 type Mode = "choose" | "login" | "register";
 

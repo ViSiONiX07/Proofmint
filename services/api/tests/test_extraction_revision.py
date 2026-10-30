@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.main import app
 from app.models import Base, CandidateRule, GuidelineDocument, Workspace
 from app.services.source_document_store import SourceDocumentStore, page_text
+from tests.auth_fixtures import install_authenticated_user
 
 UNQUOTED_RULE = "Never promise guaranteed business outcomes."
 QUOTED_RULE = 'Never use the exact phrase "guaranteed" in copy.'
@@ -87,6 +88,12 @@ def refresh_db(tmp_path, monkeypatch):
 
     for dependency in DEPENDENCIES:
         app.dependency_overrides[dependency] = override
+    original_enter = AsyncClient.__aenter__
+    async def authenticated_enter(client):
+        result = await original_enter(client)
+        install_authenticated_user(engine, client, email="revision-user@example.test")
+        return result
+    monkeypatch.setattr(AsyncClient, "__aenter__", authenticated_enter)
     yield engine
     for dependency in DEPENDENCIES:
         app.dependency_overrides.pop(dependency, None)
