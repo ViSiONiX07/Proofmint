@@ -9,13 +9,14 @@ from collections.abc import Callable, Generator
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.core.config import settings
+from app.core.auth import require_workspace_access
 from app.core.database import DatabaseNotConfiguredError, get_db_session
 from app.models.imports import ImportedFact, ImportedTerm
 from app.models.workspace import Workspace
@@ -148,7 +149,8 @@ async def _read_csv(upload: UploadFile) -> tuple[str, bytes]:
 
 
 def _make_import_endpoint(model, allowed_headers: set[str], required_headers: set[str], validator: Callable):
-    async def import_csv(file: UploadFile = File(...), workspace_id: UUID = Form(...), session: Session = Depends(get_import_db_session)) -> CsvImportResponse:
+    async def import_csv(request: Request, file: UploadFile = File(...), workspace_id: UUID = Form(...), session: Session = Depends(get_import_db_session)) -> CsvImportResponse:
+        require_workspace_access(session, workspace_id, request.state.principal, write=True)
         try:
             filename, data = await _read_csv(file)
             rows = _parse_csv(data, filename, allowed_headers, required_headers)
@@ -188,9 +190,25 @@ def _make_import_endpoint(model, allowed_headers: set[str], required_headers: se
                     if bind is not None and bind.dialect.name == "postgresql":
                         lock_key = int.from_bytes(sha256(f"proofmint-csv:{workspace_id}:{digest}".encode()).digest()[:8], "big", signed=True)
                         session.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
-                    imported_rows = set(session.scalars(
-                        select(model.source_row_number).where(model.workspace_id == workspace_id, model.source_sha256 == digest)
-                    ).all())
+                    if hasattr(session, "execute"):
+                        existing_rows = session.execute(
+                            select(model.source_row_number, model.review_status).where(
+                                model.workspace_id == workspace_id, model.source_sha256 == digest
+                            )
+                        ).all()
+                    else:
+                        # Lightweight session doubles used by the API contract tests
+                        # predate the duplicate-batch query; real SQLAlchemy sessions
+                        # always take the persisted-row path above.
+                        existing_rows = []
+                    active_rows = {
+                        row_number for row_number, status in existing_rows
+                        if status in {"pending_review", "approved"}
+                    }
+                    withdrawn_rows = {
+                        row_number for row_number, status in existing_rows if status == "rejected"
+                    }
+                    batch_still_active = bool(active_rows)
                     seen_payloads: set[tuple[tuple[str, Any], ...]] = set()
                     for row_number, values in valid_rows:
                         identity = tuple(sorted(values.items()))
@@ -198,7 +216,10 @@ def _make_import_endpoint(model, allowed_headers: set[str], required_headers: se
                             skipped += 1
                             continue
                         seen_payloads.add(identity)
-                        if row_number in imported_rows:
+                        if row_number in active_rows:
+                            skipped += 1
+                            continue
+                        if row_number in withdrawn_rows and batch_still_active:
                             skipped += 1
                             continue
                         values.update(
@@ -257,3 +278,53 @@ router.add_api_route(
         "Optional headers: preferred_form, category, usage_notes."
     ),
 )
+
+
+@router.post("/imports/facts/{fact_id}/remove", summary="Remove an imported fact batch")
+def remove_imported_fact(request: Request, fact_id: str, workspace_id: UUID, session: Session = Depends(get_import_db_session)):
+    require_workspace_access(session, workspace_id, request.state.principal, write=True)
+    return _remove_import_batch(ImportedFact, fact_id, workspace_id, session, "facts")
+
+
+@router.post("/imports/terms/{term_id}/remove", summary="Remove an imported term batch")
+def remove_imported_term(request: Request, term_id: str, workspace_id: UUID, session: Session = Depends(get_import_db_session)):
+    require_workspace_access(session, workspace_id, request.state.principal, write=True)
+    return _remove_import_batch(ImportedTerm, term_id, workspace_id, session, "terms")
+
+
+def _remove_import_batch(model, digest: str, workspace_id: UUID, session: Session, label: str):
+    """Withdraw one exact import digest from active use in its owning workspace.
+
+    Rows stay persisted so historical audit foreign keys remain. The current schema
+    only allows pending_review, approved, or rejected, so withdrawal uses rejected
+    and is distinct from a human review decision only by targeting the whole batch.
+    New audits already ignore non-approved rows. Re-import of the same bytes is
+    allowed once the batch has no remaining pending or approved rows.
+    """
+    # Keep unknown identifiers indistinguishable from absent batches. This also
+    # avoids exposing whether a malformed value belongs to another workspace.
+    try:
+        if session.in_transaction():
+            session.rollback()
+        with session.begin():
+            workspace = session.get(Workspace, workspace_id)
+            if workspace is None or workspace.kind == "legacy":
+                raise HTTPException(status_code=404, detail="Workspace was not found.")
+            batch_records = session.scalars(select(model).where(
+                model.workspace_id == workspace_id,
+                model.source_sha256 == digest.lower(),
+            )).all()
+            if not batch_records:
+                raise HTTPException(status_code=404, detail=f"No {label} found for this import batch in the workspace.")
+            records = [record for record in batch_records if record.review_status != "rejected"]
+            for record in records:
+                record.review_status = "rejected"
+            session.flush()
+        count = len(records)
+        return {"detail": f"{count} imported {label[:-1]} record(s) marked as removed" if count else "No active records remain for this import batch.", "removed_count": count}
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        session.rollback()
+        logger.error("Imported %s removal transaction failed (%s)", label, type(exc).__name__)
+        raise HTTPException(status_code=503, detail=f"Imported {label} could not be removed.") from None

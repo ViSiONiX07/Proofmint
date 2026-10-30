@@ -20,6 +20,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+services/api/.data/source-documents/
 
 # Environment files
 .env

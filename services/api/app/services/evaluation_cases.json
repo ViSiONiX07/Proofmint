@@ -1,0 +1,55 @@
+[
+  {
+    "id": "compliant-copy",
+    "content": "Meet Proofmint today.",
+    "terms": [{"term": "ProofMint", "preferred_form": "Proofmint"}],
+    "expected_findings": [],
+    "expected_repaired_content": "Meet Proofmint today."
+  },
+  {
+    "id": "restricted-phrase",
+    "content": "Guaranteed results, every time.",
+    "rules": [{"rule_text": "Never say “guaranteed”.", "source_excerpt": "Never say “guaranteed”.", "source_filename": "brand.pdf", "source_start_offset": 14}],
+    "expected_findings": [{"finding_type": "restricted_phrase", "phrase": "guaranteed", "source_filename": "brand.pdf", "verification_status": "uncertain"}],
+    "expected_repaired_content": "Guaranteed results, every time.",
+    "expect_no_safe_repair": true
+  },
+  {
+    "id": "preferred-term-repair",
+    "content": "ProofMint gives 25% more. Visit today.",
+    "terms": [{"term": "ProofMint", "preferred_form": "Proofmint"}],
+    "expected_findings": [{"finding_type": "preferred_terminology", "phrase": "ProofMint", "source_filename": "evaluation-terms.csv", "verification_status": "verified"}],
+    "expected_repaired_content": "Proofmint gives 25% more. Visit today."
+  },
+  {
+    "id": "approved-fact-literal-match",
+    "content": "The service supports CSV exports.",
+    "facts": [{"approved_statement": "The service supports CSV exports."}],
+    "expected_findings": [{"finding_type": "approved_fact_match", "phrase": "The service supports CSV exports.", "source_filename": "evaluation-facts.csv", "verification_status": "verified"}],
+    "expected_repaired_content": "The service supports CSV exports."
+  },
+  {
+    "id": "unsupported-semantic-claim",
+    "content": "Our platform guarantees every customer will double revenue.",
+    "expected_findings": []
+  },
+  {
+    "id": "inconsistent-rule-source",
+    "content": "Never say guaranteed.",
+    "rules": [{"rule_text": "Never say “guaranteed”.", "source_excerpt": "", "source_filename": "brand.pdf", "source_start_offset": 20, "source_end_offset": 45}],
+    "expected_findings": [{"finding_type": "restricted_phrase", "phrase": "guaranteed", "source_filename": "brand.pdf", "verification_status": "rejected"}],
+    "expected_repaired_content": "Never say guaranteed.",
+    "expect_no_safe_repair": true
+  },
+  {
+    "id": "ambiguous-guideline",
+    "content": "We build helpful tools.",
+    "rules": [{"rule_text": "Use clear and helpful language in all customer communications.", "source_excerpt": "Use clear and helpful language in all customer communications.", "source_filename": "brand.pdf", "source_start_offset": 0}],
+    "expected_findings": []
+  },
+  {
+    "id": "no-approved-evidence",
+    "content": "Trusted by every team.",
+    "expected_findings": []
+  }
+]

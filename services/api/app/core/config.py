@@ -1,6 +1,9 @@
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
+from pathlib import Path
+
+_API_ROOT = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Proofmint Verification API"
@@ -13,6 +16,9 @@ class Settings(BaseSettings):
     GUIDELINE_MAX_MULTIPART_OVERHEAD_BYTES: int = 256 * 1024
     GUIDELINE_MAX_FILES: int = 5
     GUIDELINE_MAX_PAGES: int = 200
+    # Private local storage for immutable uploaded guideline source PDFs.
+    # Production deployments should point this at a durable, access-restricted volume.
+    SOURCE_DOCUMENT_STORAGE_DIR: Path = _API_ROOT / ".data" / "source-documents"
 
     # CSV imports are parsed fully in memory before one transactional DB write.
     CSV_IMPORT_MAX_FILE_BYTES: int = 5 * 1024 * 1024
@@ -33,6 +39,12 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000"
     ]
+    APP_ENV: str = "development"
+    AUTH_FRONTEND_URL: str = "http://localhost:3000"
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: SecretStr | None = None
+    GOOGLE_REDIRECT_URI: str | None = None
+    GOOGLE_AUTH_ENABLED: bool = False
     
     model_config = SettingsConfigDict(
         env_file=".env",

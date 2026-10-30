@@ -1,0 +1,11 @@
+type Clearance = { decision: string; created_at: string } | null;
+export function ClearancePanel({ clearance, canClear, readinessReason, loading, error, onClear, onHold }: { clearance: Clearance; canClear: boolean; readinessReason: string; loading: boolean; error: string; onClear: () => void; onHold: () => void }) {
+  return <section id="clearance-stage" aria-labelledby="clearance-heading" className="mt-8 rounded border border-border-structural bg-[#111417] p-5 font-sans sm:p-6">
+    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-verification-mint">Human decision</p><h3 id="clearance-heading" className="mt-2 text-xl font-semibold text-off-white">Clearance and guideline feedback</h3>
+    <p className="mt-2 max-w-3xl text-base leading-relaxed text-secondary">A repair preview never grants clearance. Clearance is saved against this persisted audit, and the API checks unresolved findings again when you submit.</p>
+    {clearance && <p className="mt-4 border border-border-structural p-4 text-base text-off-white">Saved decision: <strong className="text-verification-mint">{clearance.decision}</strong> · {new Date(clearance.created_at).toLocaleString()}</p>}
+    <p role={canClear ? "status" : "alert"} className={`mt-4 text-base leading-relaxed ${canClear ? "text-secondary" : "text-warning-copper"}`}>{readinessReason}</p>
+    {error && <p role="alert" className="mt-4 border border-warning-copper/50 p-4 text-base leading-relaxed text-off-white">Clearance request failed: {error}</p>}
+    <div className="mt-5 flex flex-wrap gap-3"><button type="button" disabled={loading || !canClear} onClick={onClear} className="min-h-11 rounded bg-verification-mint px-5 py-2 text-base font-semibold text-graphite-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-verification-mint disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Saving decision…" : "Issue clearance"}</button><button type="button" disabled={loading} onClick={onHold} className="min-h-11 rounded border border-warning-copper/50 px-5 py-2 text-base font-semibold text-warning-copper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-copper disabled:cursor-not-allowed disabled:opacity-50">Place on hold</button></div>
+  </section>;
+}

@@ -2,371 +2,192 @@
 
 > **Nothing ships unproven.**
 
-Proofmint is a brand verification workspace designed to help teams check marketing content against approved brand guidelines, preferred terminology, and approved factual statements before publication.
+![Proofmint](apps/web/public/mint_proofmark_logo.png)
 
-The Round 2 implementation provides a deployed Next.js frontend, a FastAPI backend, PostgreSQL persistence, guideline PDF ingestion, terminology and approved-facts imports, configured text auditing, review decisions, and a clearance gate.
+Proofmint is an AI-powered pre-publication brand verification workspace. It checks marketing content against approved brand guidelines, terminology, and supporting claim records while keeping evidence review and final clearance under human control.
 
-**Live Demo:** [https://proofmint-rust.vercel.app/](https://proofmint-rust.vercel.app/)
+**[Open Proofmint](https://emicproofmint.xyz/)** · [Source code](https://github.com/ViSiONiX07/Proofmint)
 
----
+The custom domain is the intended canonical public URL; confirm deployment and HTTPS before treating it as verified. The existing Vercel deployment, where still active, is a fallback reference: https://proofmint-rust.vercel.app/
 
-## 1. Project Links
+## Product principles and features
 
-| Resource | Link |
+Evidence-backed findings, intent-preserving supported corrections, human-controlled review, traceable decisions, and brand governance.
+
+- Seven stages: Guidelines, Evidence, Rules, Copy, Findings, Repair, Evaluation.
+- Bounded PDF guideline ingestion and candidate-rule extraction.
+- Approved-facts and terminology CSV imports with review states.
+- Evidence verification, repair previews, persisted decisions, Ambiguity Radar, and labelled evaluation.
+- Guest-first browsing with deferred authentication.
+- Email/password accounts, profile initials, secure sessions, authorization, and restricted Judge Mode.
+- Google OAuth remains implemented but is disabled for the current deployment.
+
+## Technology and architecture
+
+| Area | Technologies |
 |---|---|
-| Live application | [Proofmint Web App](https://proofmint-rust.vercel.app/) |
-| Backend API root | [https://proofmint-q9ss.onrender.com/](https://proofmint-q9ss.onrender.com/) |
-| Interactive API documentation (Swagger UI) | [https://proofmint-q9ss.onrender.com/docs](https://proofmint-q9ss.onrender.com/docs) |
-| API health check | [https://proofmint-q9ss.onrender.com/api/v1/health](https://proofmint-q9ss.onrender.com/api/v1/health) |
-| OpenAPI specification (JSON) | [https://proofmint-q9ss.onrender.com/openapi.json](https://proofmint-q9ss.onrender.com/openapi.json) |
-| Alternative API documentation (ReDoc) | [https://proofmint-q9ss.onrender.com/redoc](https://proofmint-q9ss.onrender.com/redoc) |
-| Source code | [GitHub Repository](https://github.com/ViSiONiX07/Proofmint) |
-| Sample data used for testing | `place_holder` |
-
-### Deployment Architecture
-
-- **Frontend:** Next.js and React, hosted on Vercel.
-- **Backend:** Python and FastAPI, hosted on Render.
-- **Database:** PostgreSQL, hosted on Neon.
-- **Database access:** SQLAlchemy with Psycopg 3.
-- **Schema migrations:** Alembic.
-
-The frontend communicates with the backend through the configured `NEXT_PUBLIC_API_URL`. PostgreSQL stores supported workflow records, imports, audit results, review decisions, and clearance records.
-
----
-
-## 2. Monorepo Structure
-
-```text
-proofmint/
-├── apps/
-│   └── web/                       # Next.js frontend
-│       ├── app/                   # Application routes and pages
-│       ├── components/            # Reusable UI components
-│       ├── lib/                   # Frontend utilities and workspace logic
-│       ├── public/                # Static assets
-│       └── package.json
-│
-├── services/
-│   └── api/                       # FastAPI backend
-│       ├── app/
-│       │   ├── api/
-│       │   │   ├── health.py
-│       │   │   ├── guidelines.py
-│       │   │   ├── imports.py
-│       │   │   ├── candidate_rules.py
-│       │   │   ├── import_review.py
-│       │   │   ├── audits.py
-│       │   │   └── workspaces.py
-│       │   ├── core/              # Settings, database and upload limits
-│       │   ├── models/            # SQLAlchemy database models
-│       │   ├── schemas/           # API request and response schemas
-│       │   ├── services/
-│       │   │   └── audit_engine.py
-│       │   └── main.py            # ASGI application entry point
-│       ├── alembic/               # Versioned database migrations
-│       ├── tests/                 # Backend tests
-│       ├── requirements.txt
-│       ├── alembic.ini
-│       └── README.md
-│
-├── docs/
-│   └── design/                    # Design system and design assets
-│
-├── .env.example                   # Environment-variable template
-├── .gitignore
-├── AGENTS.md                      # AI coding-agent instructions
-├── THIRD_PARTY.md                 # Third-party dependency inventory
-└── README.md
-```
+| Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, lucide-react |
+| Backend | Python, FastAPI, Pydantic, SQLAlchemy, Alembic |
+| Database | PostgreSQL; Neon where configured |
+| Processing | PyMuPDF and ReportLab |
+| Deployment | Vercel, Render, Neon where configured |
 
-*This is a representative overview of the main project paths; consult the repository for the complete file tree.*
+    apps/web/                 Next.js frontend, routes, components, styles, client workflow helpers
+    services/api/app/         FastAPI routes, auth, models, schemas, services
+    services/api/alembic/     Database migrations
+    services/api/tests/       Backend tests
+    apps/web/lib/             Frontend workflow and validation helpers
+    docs/                     Design and Round 3 documentation
+    samples/                  Illustrative data
+    .env.example              Environment template
 
----
+## Prerequisites
 
-## 3. Prerequisites
+Install Git, Node.js, npm, Python, and PostgreSQL.
 
-- **Node.js:** 18.18 or newer.
-- **npm:** 9 or newer.
-- **Python:** 3.11 or newer.
-- **Git:** 2.30 or newer.
-- **PostgreSQL:** A local or hosted database for persistence-dependent backend operations.
+    git --version
+    node --version
+    npm --version
+    python --version
+    psql --version
 
-The public deployment is available without a local database configuration. A local development environment requires its own environment variables and PostgreSQL configuration for ingestion, imports, audits, and other persistence-dependent operations.
+## Clone and backend setup
 
----
+    git clone https://github.com/ViSiONiX07/Proofmint.git
+    cd Proofmint
+    git branch
+    git status
+    cd services/api
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    pip install -r requirements.txt
+    Copy-Item .env.example .env
 
-## 4. Quick Start
+Configure PostgreSQL using either DATABASE_URL or all individual fields. DATABASE_URL takes precedence when set.
 
-### A. Frontend Setup
+    DATABASE_URL=
+    POSTGRES_SERVER=localhost
+    POSTGRES_PORT=5432
+    POSTGRES_USER=proofmint_app
+    POSTGRES_PASSWORD=replace_with_local_password
+    POSTGRES_DB=proofmint
+    APP_ENV=development
+    AUTH_FRONTEND_URL=http://localhost:3000
+    BACKEND_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+    GOOGLE_AUTH_ENABLED=false
+    GOOGLE_CLIENT_ID=
+    GOOGLE_CLIENT_SECRET=
+    GOOGLE_REDIRECT_URI=
 
-From the repository root:
+Apply migrations; do not drop production data:
 
-```bash
-cd apps/web
-npm install
-```
+    alembic upgrade head
+    alembic current
+    alembic heads
 
-Create an `apps/web/.env.local` file containing:
+## Frontend setup
 
-```dotenv
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
+    cd apps/web
+    npm install
 
-Start the frontend:
+Create apps/web/.env.local:
 
-```bash
-npm run dev
-```
+    NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+    NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=false
 
-Open [http://localhost:3000](http://localhost:3000).
+Never put database credentials, OAuth client secrets, or session secrets in NEXT_PUBLIC_ variables.
 
-**Production frontend:** [https://proofmint-rust.vercel.app/](https://proofmint-rust.vercel.app/)
+## Run locally
 
-To verify the frontend:
+Terminal 1 — FastAPI:
 
-```bash
-npm run build
-npm run lint
-```
+    cd services/api
+    .\.venv\Scripts\Activate.ps1
+    uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-To run the workspace-session test:
+Terminal 2 — Next.js:
 
-```bash
-npm run test:workspace
-```
+    cd apps/web
+    npm run dev
 
-### B. Backend Setup
+Frontend: http://localhost:3000
+API: http://127.0.0.1:8000
+Swagger in development: http://127.0.0.1:8000/docs
 
-From the repository root:
+PostgreSQL must be running and migrations applied before registration, Judge Mode, uploads, imports, or persisted audits can work. CORS, the frontend API URL, browser origin, and cookies must agree.
 
-```bash
-cd services/api
-python -m venv .venv
-```
+## Environment reference
 
-Activate the environment on Windows PowerShell:
+Backend variables include DATABASE_URL or POSTGRES_SERVER, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, APP_ENV, AUTH_FRONTEND_URL, BACKEND_CORS_ORIGINS, SOURCE_DOCUMENT_STORAGE_DIR, GOOGLE_AUTH_ENABLED, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
+Frontend variables are NEXT_PUBLIC_API_URL and NEXT_PUBLIC_GOOGLE_AUTH_ENABLED.
 
-On macOS or Linux:
+Google sign-in is unavailable because the current domain is not currently supported/configured by Google authentication. Email/password and Judge Mode remain available. To enable Google later, set both flags true, provide server-side credentials, register the exact callback URI with Google, and restart or redeploy. Never expose the client secret to the frontend.
 
-```bash
-source .venv/bin/activate
-```
+## Seven-stage user guide
 
-Install backend dependencies:
+Guests can explore public pages and the Studio introduction. Authentication is requested only when a protected operation begins.
 
-```bash
-pip install -r requirements.txt
-```
+1. **Guidelines** — Upload one PDF. The API enforces a 10 MiB file limit plus bounded request and page limits.
+2. **Evidence** — Import approved facts or terminology CSV files. Rows begin as pending review and can be approved or rejected.
+3. **Rules** — Review extracted candidate rules and approved terminology. Only approved records drive deterministic checks.
+4. **Copy** — Enter marketing copy for an audit. The audit stores a content hash and supported finding metadata.
+5. **Findings** — Review matched phrases, categories, evidence excerpts, source pages, verification outcomes, and status.
+6. **Repair** — Accept, edit and save, or reject supported proposals. Decisions persist; the original submitted copy is never automatically overwritten.
+7. **Evaluation** — Review labelled synthetic metrics, evidence outcomes, consistency, repair validity, Ambiguity Radar, and clearance. Synthetic benchmark results do not automatically describe every user audit.
 
-Create a local backend environment file from the safe template:
+## Authentication and access modes
 
-```powershell
-Copy-Item ..\..\.env.example .env
-```
+**Guest:** Public browsing and Studio introduction are available. Uploads, imports, audits, saved decisions, and private history require FastAPI-enforced authentication.
 
-Edit `services/api/.env` and configure either `DATABASE_URL` or the supported PostgreSQL connection variables. Use your own local or hosted PostgreSQL credentials; never commit secrets to Git.
+**User:** Register or sign in with email/password, restore sessions after refresh, manage profile, access authorized workspaces, use the workflow, and sign out. The avatar uses first-name and surname initials.
 
-Apply database migrations:
+**Judge Mode:** Login as a Judge requires no personal credentials. It creates a restricted session tied to an isolated curated demonstration workspace. The avatar is JDG. Judges cannot access normal user workspaces, profiles, private documents, administrator functionality, or global configuration. Exiting invalidates the session.
 
-```bash
-alembic upgrade head
-```
+Google sign-in is currently unavailable; its disabled option explains why and does not initiate OAuth.
 
-Start the development API:
+## API
 
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+The versioned API is rooted at /api/v1.
 
-Local API links:
+- /auth/* — registration, login, sessions, profiles, logout, Judge Mode, optional Google OAuth.
+- /guidelines/* — PDF ingestion and rule retrieval.
+- /facts/* and /terms/* — evidence imports and review.
+- /audits/* — audits, findings, verification, repair, decisions, clearance.
+- /ambiguity-radar — persisted decision analysis.
+- /evaluation — labelled synthetic evaluation.
+- /workspaces/* — authorized restoration.
 
-- API root: [http://localhost:8000/](http://localhost:8000/)
-- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Health check: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
-- OpenAPI specification: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+## Security
 
-Run backend tests from `services/api/`:
+Protected operations require server-side sessions and ownership or role authorization. Sessions use HttpOnly cookies, CSRF protection for state changes, expiration, and revocation. Passwords are hashed. Judge sessions are isolated. Uploads are validated and retained privately. CORS is restricted.
 
-```bash
-pytest
-```
+**Never commit .env files, passwords, OAuth secrets, database credentials, session tokens, private user data, database dumps, or production logs.**
 
-**Note:** The local API must be configured with the appropriate CORS origins and database settings. The production database credentials must not be copied into frontend environment files.
+## Troubleshooting
 
----
+- **Database failure:** Check PostgreSQL, credentials, DATABASE_URL or POSTGRES_* settings, and the loaded .env.
+- **Missing tables:** Run alembic upgrade head from services/api.
+- **401:** Normal for a guest /auth/me; for protected operations, sign in and confirm the session cookie.
+- **403:** Check role permissions, CSRF, and workspace ownership.
+- **Failed to fetch:** Check FastAPI, NEXT_PUBLIC_API_URL, CORS, and the browser Network response.
+- **Google unavailable:** Google is disabled because the current domain is not currently supported/configured for Google authentication.
+- **PDF upload failure:** Check PDF type, size, authentication, migrations, and private storage.
 
-## 5. Production API Reference
+## Deployment, team, and future scope
 
-All versioned business endpoints use the `/api/v1` prefix.
+The intended architecture is Vercel for Next.js, Render for FastAPI, and Neon PostgreSQL where configured. Keep deployment credentials separate from frontend files.
 
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/` | GET | API root and service information |
-| `/api/v1/health` | GET | Health-check response |
-| `/api/v1/guidelines/ingest` | POST | Extract text from guideline PDFs and persist supported document metadata and candidate rules |
-| `/api/v1/rules/pending` | GET | List pending candidate rules |
-| `/api/v1/rules/{candidate_id}/approve` | POST | Approve a pending candidate rule |
-| `/api/v1/rules/{candidate_id}/reject` | POST | Reject a pending candidate rule |
-| `/api/v1/facts/import` | POST | Import approved-facts CSV records |
-| `/api/v1/terms/import` | POST | Import terminology CSV records |
-| `/api/v1/facts` | GET | List imported facts for review |
-| `/api/v1/terms` | GET | List imported terminology for review |
-| `/api/v1/audits` | POST | Run a content audit and persist its results |
-| `/api/v1/audits/{audit_id}` | GET | Retrieve a persisted audit |
-| `/api/v1/audits/{audit_id}/findings/{finding_id}/decisions` | POST | Record a supported finding decision |
-| `/api/v1/audits/{audit_id}/clearance` | POST | Record a clearance decision |
-| `/api/v1/workspaces/{workspace_id}` | GET | Retrieve workspace information |
+**EMIC TECH** · Vivekananda Global University (NIAT)
 
-Use the live [Swagger UI](https://proofmint-q9ss.onrender.com/docs) for request schemas, required fields, response formats, and additional endpoints.
+Keshav Modi · Sparsh Shrimal · Akshara Jain · Tanmay Singh Panwar · Dhananjay Dagar · Yuvraj Rathore
 
-Some operations require a valid `workspace_id` and other identifiers returned by preceding workflow steps. Opening an endpoint directly in a browser does not execute a complete workflow.
+Future scope includes multimodal and visual compliance, design-platform integrations, multilingual guidelines, advanced governance, and private deployment options.
 
----
+## Checks
 
-## 6. Current Implementation Status
+From apps/web: npm run test:workspace, npx tsc --noEmit, npm run lint.
+From services/api: python -m pytest -q.
 
-| Feature / Area | Status | Current implementation |
-|---|---|---|
-| **Deployed frontend** | ✅ Available | Next.js application hosted on Vercel. |
-| **FastAPI backend** | ✅ Available | Deployed API with versioned routes and interactive documentation. |
-| **PostgreSQL persistence** | ✅ Implemented | SQLAlchemy models, database sessions, and Alembic migrations. |
-| **Guideline PDF ingestion** | ✅ Implemented | Bounded PDF text extraction using PyMuPDF, with persisted document metadata, candidate rules, and source information. PDF binaries and the complete extracted document text are not stored. |
-| **Candidate-rule review** | ✅ Implemented | Candidate rules can be listed and explicitly approved or rejected. Reviewer identity and full reviewer audit history are not currently stored by this schema. |
-| **Terminology CSV imports** | ✅ Implemented | Validates imported terminology, supports preferred forms, reports invalid rows, and skips applicable duplicates. |
-| **Approved-facts CSV imports** | ✅ Implemented | Validates claim records, persists imported rows, and reports row-level errors. |
-| **Imported-row review** | ✅ Implemented | Imported facts and terminology remain pending until explicitly approved or rejected. |
-| **Configured text audits** | ✅ Implemented, limited scope | Uses deterministic literal checks against approved rules, preferred terminology, and imported approved-fact statements. |
-| **Finding and decision persistence** | ✅ Implemented | Stores supported findings, their review states, and finding decisions. |
-| **Workspace-scoped workflow** | ✅ Implemented | PDF ingestion creates a session workspace; the frontend retains its ID in browser session storage. |
-| **Duplicate-import handling** | ✅ Implemented | Identical uploaded files and duplicate rows within an import are skipped under the supported deduplication rules. |
-| **Clearance gate** | ✅ Implemented | Clearance is blocked while actionable findings remain pending or flagged. Supported decisions are persisted. |
-| **Evidence-Locked Findings** | 🟡 Partial | Findings can include matched text spans and source-rule information. A comprehensive independent verifier for semantic evidence validity is not implemented. |
-| **Intent-Preserving Repair** | 🟡 Partial | Configured preferred terminology can provide a correction. General semantic, model-generated minimal repairs are not implemented as a production LLM capability. |
-| **Ambiguity Radar** | 🟡 Partial / planned | The complete analytics workflow for recurring reviewer disagreements and unclear rules remains future work. Visual demonstration elements should not be interpreted as proof of a complete analytics engine. |
-| **Production LLM engine** | ⏳ Planned | A production provider-backed language-model analysis and repair engine is not currently implemented. |
-| **Authentication and tenant authorization** | ⏳ Not implemented | Workspace IDs provide logical session separation, not authenticated-user or tenant-level access control. |
+Proofmint — Nothing ships unproven.
 
-### Audit Behaviour and Limitations
-
-The current audit engine is deliberately conservative and deterministic.
-
-It supports:
-
-- Matching explicitly prohibited or restricted quoted phrases in approved candidate rules.
-- Checking configured terminology against its preferred form.
-- Detecting exact matches to approved factual statements as informational evidence matches.
-- Persisting finding statuses, supported review decisions, and clearance records.
-
-An exact approved-statement match does **not** establish that a claim is true in every context, and a missing match does not automatically prove that a claim is false. The current engine does not perform comprehensive semantic, legal, or contextual compliance analysis.
-
-The application therefore represents a working Round 2 implementation of the core verification workflow—not a fully autonomous AI-based brand verification system.
-
----
-
-## 7. Workspace and Data Persistence
-
-Proofmint uses workspace IDs to scope supported documents, imports, audits, review decisions, and clearance operations.
-
-The implemented lifecycle is:
-
-1. Upload a guideline PDF successfully to begin a new workspace.
-2. Retain the active workspace ID in browser session storage.
-3. Import terminology and approved-facts records into that workspace.
-4. Review imported records and approve or reject candidate rules.
-5. Run an audit using the applicable approved records.
-6. Review findings and record supported decisions.
-7. Apply the clearance gate and persist the resulting decision.
-
-Starting a new session clears the active session state; it does not delete historical database records.
-
-PostgreSQL persists the supported application records. Audit records store a content hash and character count rather than the complete submitted marketing copy. Finding records may retain matched phrases, explanations, source excerpts, and other finding metadata.
-
-These storage behaviours are not equivalent to a zero-retention architecture: the database intentionally persists certain records needed for workflow continuity and review.
-
----
-
-## 8. Security and Governance
-
-Proofmint keeps final clearance decisions explicit, but the current implementation has important security boundaries.
-
-- **Secrets:** Store `DATABASE_URL` and database credentials in Render environment settings or the linked environment group. Never commit credentials to Git or expose them through `NEXT_PUBLIC_` variables.
-- **Frontend configuration:** `NEXT_PUBLIC_API_URL` identifies the public backend URL; it must not contain secrets.
-- **CORS:** Configure `BACKEND_CORS_ORIGINS` for the deployed Vercel origin and the local development origins that are actually needed.
-- **Database persistence:** Database records and supported review decisions persist across requests and sessions.
-- **Workspace isolation:** Workspace IDs provide logical isolation for the supported workflow. They are not a substitute for authentication or authorization.
-- **Human review:** Clearance is a separate decision from generating findings. Actionable findings must be resolved or dismissed before clearance can proceed.
-- **Evidence integrity:** The current literal-match engine has documented limitations. Findings should not be represented as independently verified semantic or legal conclusions.
-- **Confidential data:** Because authentication and tenant-level authorization are not implemented, do not use the current deployment for confidential or sensitive production brand content.
-
-For local database setup and migration instructions, see [services/api/README.md](services/api/README.md).
-
----
-
-## 9. Round 2 Achievements
-
-Round 2 moved Proofmint from a planned product and interface concept to a deployed, database-backed application.
-
-The main engineering outcomes include:
-
-1. A deployed Next.js frontend and FastAPI backend.
-2. PostgreSQL persistence with versioned schema migrations.
-3. Guideline PDF ingestion and candidate-rule records with source information.
-4. Validated terminology and approved-facts CSV imports.
-5. Explicit review states for candidate rules and imported records.
-6. Workspace-scoped workflow operations and duplicate-import handling.
-7. Persistent audits, finding decisions, and clearance gating.
-8. Public API documentation for integration and testing.
-
-These capabilities form the foundation for completing stronger evidence verification, intent-preserving repair, and evaluation-driven guideline governance.
-
----
-
-## 10. Round 3 Priorities
-
-The next round will focus on the following three improvements.
-
-### 1. Strengthen Evidence-Locked Findings
-
-Improve source and rule traceability, validate the relationship between a finding and its supporting evidence, and handle unsupported or uncertain claims conservatively. Test invalid references and evidence gaps.
-
-### 2. Complete Intent-Preserving Repair and Human Review
-
-Improve minimal-edit suggestions, preserve the creator's intent, make review decisions and their reasons clearer, and retain explicit human control over any correction and clearance.
-
-### 3. Improve Reliability, Evaluation, and Ambiguity Radar
-
-Expand the labelled evaluation set, test run-to-run consistency and false-positive behaviour, improve error handling and regression coverage, and identify recurring guideline ambiguity from review outcomes.
-
-These are planned improvements, not claims of completed Round 2 functionality. Any reported accuracy, reliability, or time-saving result must be based on measured test evidence.
-
----
-
-## 11. Development Principles
-
-Proofmint follows these principles throughout implementation:
-
-- **Traceability:** Findings should identify the content and approved rule information behind them.
-- **Conservative verification:** Literal matches must not be misrepresented as comprehensive semantic analysis.
-- **Human accountability:** Review and clearance remain explicit decisions.
-- **Persistent workflow:** Supported records and decisions are stored so the application can retrieve them across requests.
-- **Incremental development:** New capabilities should be added only when their behaviour can be tested and their limitations explained.
-- **Accurate reporting:** Implemented, partially implemented, planned, and future capabilities must remain distinct.
-
----
-
-## 12. Third-Party Dependencies and Acknowledgements
-
-Proofmint uses open-source frameworks and libraries for its frontend, API, database access, PDF processing, and testing.
-
-See [`THIRD_PARTY.md`](THIRD_PARTY.md) for the project's third-party dependency inventory.
-
-The project also maintains design-system documentation and visual assets under [`docs/design/`](docs/design/).
-
----
-
-**Proofmint — Nothing ships unproven.**
