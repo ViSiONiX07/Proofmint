@@ -20,8 +20,8 @@ import { summarizeRepairWorkspace } from "../../lib/repair-workspace.mjs";
 import { buildReviewedCopy } from "../../lib/final-audit.mjs";
 import { clearWorkflowSession, createFreshStudioContext, createFreshWorkflowSession, readWorkflowSession, resolveWorkflowSession, saveWorkflowSession } from "../../lib/workflow-session.mjs";
 import { chooseExampleCopy, NORTHSTAR_EXAMPLE_COPY } from "../../lib/marketing-copy-example.mjs";
+import { API_BASE } from "../../lib/api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 type State = { kind: "idle" | "loading" | "success" | "error" | "sample"; message: string };
 type PdfOutcome = { filename: string; status: "success" | "error"; extraction?: { document_id?: string | null; candidate_rule_count?: number; size_bytes: number; page_count: number; sha256: string; created_at?: string | null; extraction_status: string }; error_code?: string; message?: string };

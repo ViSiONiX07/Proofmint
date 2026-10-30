@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, setApiCsrfToken } from "../../lib/api-fetch";
+import { API_BASE } from "../../lib/api-base";
 import { getProfileInitials } from "../../lib/profile-initials.mjs";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type Profile = { first_name: string; surname: string; email: string };
 
 export default function ProfilePage() {

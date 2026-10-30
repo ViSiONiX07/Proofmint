@@ -37,7 +37,10 @@ class Settings(BaseSettings):
     # CORS Configuration
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "https://emicproofmint.xyz",
+        "https://www.emicproofmint.xyz",
+        "https://proofmint-rust.vercel.app",
     ]
     APP_ENV: str = "development"
     AUTH_FRONTEND_URL: str = "http://localhost:3000"

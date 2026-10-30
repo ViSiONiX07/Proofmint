@@ -84,6 +84,8 @@ class AuthzMiddleware:
                         await JSONResponse({"detail": "The request could not be verified. Refresh and try again."}, status_code=403)(scope, receive, send)
                         return
                 workspace_value = request.query_params.get("workspace_id")
+                if not workspace_value and path.startswith("/api/v1/workspaces/"):
+                    workspace_value = path.rsplit("/", 1)[-1]
                 if path == "/api/v1/audits" and request.method == "POST":
                     try:
                         if int(request.headers.get("content-length", "0")) > 1_000_000:

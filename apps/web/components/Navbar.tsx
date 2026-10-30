@@ -6,11 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "./BrandLogo";
 import { Menu, UserRound, X } from "lucide-react";
 import { apiFetch, setApiCsrfToken } from "../lib/api-fetch";
+import { API_BASE } from "../lib/api-base";
 import { clearActiveWorkspace } from "../lib/workspace-session.mjs";
 import { clearWorkflowSession } from "../lib/workflow-session.mjs";
 import { getProfileInitials } from "../lib/profile-initials.mjs";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type Account = { role: "user" | "judge"; profile: { first_name: string; surname: string; email: string } | null; label?: string };
 
 interface NavbarProps {

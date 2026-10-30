@@ -150,7 +150,6 @@ async def _read_csv(upload: UploadFile) -> tuple[str, bytes]:
 
 def _make_import_endpoint(model, allowed_headers: set[str], required_headers: set[str], validator: Callable):
     async def import_csv(request: Request, file: UploadFile = File(...), workspace_id: UUID = Form(...), session: Session = Depends(get_import_db_session)) -> CsvImportResponse:
-        require_workspace_access(session, workspace_id, request.state.principal, write=True)
         try:
             filename, data = await _read_csv(file)
             rows = _parse_csv(data, filename, allowed_headers, required_headers)
@@ -178,9 +177,7 @@ def _make_import_endpoint(model, allowed_headers: set[str], required_headers: se
         objects = []
         try:
             with session.begin():
-                workspace = session.get(Workspace, workspace_id)
-                if workspace is None or workspace.kind == "legacy":
-                    raise HTTPException(status_code=404, detail="Workspace was not found.")
+                require_workspace_access(session, workspace_id, request.state.principal, write=True)
                 if valid_rows:
                     # Serialize imports of identical byte-for-byte files across
                     # workers. This uses PostgreSQL's transaction-scoped lock and

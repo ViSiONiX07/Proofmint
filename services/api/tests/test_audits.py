@@ -12,10 +12,11 @@ from app.api.workspaces import get_workspace_session
 from app.main import app
 from app.models import Base, CandidateRule, GuidelineDocument, ImportedFact, ImportedTerm, Workspace
 from app.models.audit import AuditFinding, AuditRun
+from tests.auth_fixtures import install_authenticated_user
 
 
 @pytest.fixture
-def audit_db():
+def audit_db(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
@@ -40,6 +41,12 @@ def audit_db():
             yield session
     app.dependency_overrides[get_audit_session] = override
     app.dependency_overrides[get_workspace_session] = override
+    original_enter = AsyncClient.__aenter__
+    async def authenticated_enter(client):
+        result = await original_enter(client)
+        install_authenticated_user(engine, client, email="audit-user@example.test")
+        return result
+    monkeypatch.setattr(AsyncClient, "__aenter__", authenticated_enter)
     yield doc_id, workspace_id, engine
     app.dependency_overrides.pop(get_audit_session, None)
     app.dependency_overrides.pop(get_workspace_session, None)
