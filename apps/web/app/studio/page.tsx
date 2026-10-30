@@ -131,6 +131,11 @@ export default function StudioPage() {
       setWorkflowReady(true);
       return;
     }
+    const restorationGeneration = ++sessionGenerationRef.current;
+    let cancelled = false;
+    const isCurrentRestoration = () => !cancelled
+      && sessionGenerationRef.current === restorationGeneration
+      && readActiveWorkspace(window.sessionStorage) === savedId;
     setWorkspaceId(savedId); setWorkspaceLoading(true);
     void (async () => {
       let auditId: string | null = null;
@@ -143,12 +148,14 @@ export default function StudioPage() {
         const data: unknown = await response.json();
         if (!response.ok) throw new Error(messageFor(response, data));
         if (!data || typeof data !== "object" || !("documents" in data) || !Array.isArray(data.documents) || !("latest_audit_id" in data)) throw new Error("The active workspace returned an invalid restoration response.");
+        if (!isCurrentRestoration()) return;
         workspaceLoaded = true;
         const workspace = data as { documents: { id: string; source_filename: string; file_size_bytes: number; page_count: number; source_sha256: string; created_at: string }[]; latest_audit_id: string | null };
         const latest = workspace.documents?.[0];
         if (latest) {
           hasDocument = true;
           const restored = { filename: latest.source_filename, size_bytes: latest.file_size_bytes, page_count: latest.page_count, sha256: latest.source_sha256, document_id: latest.id, created_at: latest.created_at, candidate_rule_count: 0, extraction_status: "text_extracted" };
+          if (!isCurrentRestoration()) return;
           setDocument(restored); void loadRules(latest.id, savedId);
         }
         if (workspace.latest_audit_id) {
@@ -163,6 +170,7 @@ export default function StudioPage() {
               const computedHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
               copyMatchesAudit = computedHash.toLowerCase() === auditHash.toLowerCase();
             }
+            if (!isCurrentRestoration()) return;
             setCopy(savedCopy);
             setAuditResult({ ...(auditData as Omit<AuditApiResult, "submittedText">), submittedText: copyMatchesAudit ? savedCopy : "" });
             setAuditRestored(true);
@@ -170,8 +178,11 @@ export default function StudioPage() {
         } else if (savedFlow?.workspaceId === savedId && savedFlow.auditId === null && savedFlow.auditHash === null) {
           setCopy(savedFlow.copy);
         }
-      } catch (error) { setEvidenceError(error instanceof Error ? error.message : "Active workspace could not be restored."); }
+      } catch (error) {
+        if (isCurrentRestoration()) setEvidenceError(error instanceof Error ? error.message : "Active workspace could not be restored.");
+      }
       finally {
+        if (!isCurrentRestoration()) return;
         if (!workspaceLoaded) {
           setStep(1);
           setVisitedStages(new Set([1]));
@@ -186,6 +197,7 @@ export default function StudioPage() {
         setWorkflowReady(true);
       }
     })();
+    return () => { cancelled = true; };
   }, []);
   useEffect(() => {
     if (!workflowReady) return;
