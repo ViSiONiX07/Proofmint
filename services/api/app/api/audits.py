@@ -11,7 +11,7 @@ from pathlib import Path
 from collections.abc import Generator
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -139,7 +139,15 @@ def create_audit(payload: AuditCreate, response: Response, session: Session = De
             session.add_all(records); session.flush(); session.refresh(run)
         return _read(session, run)
     except SQLAlchemyError as exc:
-        session.rollback(); logger.error("Audit persistence failed (%s) sqlstate=%s", type(exc).__name__, getattr(getattr(exc, "orig", None), "sqlstate", None) or "unknown")
+        session.rollback()
+        origin = getattr(exc, "orig", None)
+        diagnostic = getattr(getattr(origin, "diag", None), "message_primary", None)
+        logger.error(
+            "Audit persistence failed (%s) sqlstate=%s db_error=%s",
+            type(exc).__name__,
+            getattr(origin, "sqlstate", None) or "unknown",
+            diagnostic or "unknown",
+        )
         raise HTTPException(status_code=503, detail="Audit results could not be persisted.") from None
 
 
@@ -484,7 +492,7 @@ def _generate_docx_report(audit, findings, decisions, clearance, document, rules
 
 
 @router.post("/audits/{audit_id}/findings/{finding_id}/repair-decisions", response_model=AuditRead)
-def decide_repair(audit_id: UUID, finding_id: UUID, payload: RepairDecisionCreate, workspace_id: UUID, session: Session = Depends(get_audit_session)):
+def decide_repair(request: Request, audit_id: UUID, finding_id: UUID, payload: RepairDecisionCreate, workspace_id: UUID, session: Session = Depends(get_audit_session)):
     """Persist an append-only repair decision for a currently supported proposal."""
     try:
         with session.begin():
@@ -504,20 +512,28 @@ def decide_repair(audit_id: UUID, finding_id: UUID, payload: RepairDecisionCreat
             )
             if latest and latest.action == "reject":
                 raise HTTPException(status_code=409, detail="This repair proposal was already rejected and cannot be reopened.")
-            try:
-                _repaired, replacements = build_repair_preview(session, payload.content, workspace_id, [finding])
-            except ValueError as exc:
-                raise HTTPException(status_code=409, detail=str(exc)) from None
-            supported = next((item for item in replacements if item["finding_id"] == finding.id), None)
-            if supported is None:
-                raise HTTPException(status_code=409, detail="No currently supported repair proposal exists for this finding.")
-            if payload.action == "accept" and payload.replacement != supported["replacement"]:
-                raise HTTPException(status_code=409, detail="Accept must use the currently supported replacement text.")
+            supported = None
+            if payload.action != "manual":
+                try:
+                    _repaired, replacements = build_repair_preview(session, payload.content, workspace_id, [finding])
+                except ValueError as exc:
+                    raise HTTPException(status_code=409, detail=str(exc)) from None
+                supported = next((item for item in replacements if item["finding_id"] == finding.id), None)
+                if supported is None:
+                    raise HTTPException(status_code=409, detail="No currently supported repair proposal exists for this finding.")
+                if payload.action == "accept" and payload.replacement != supported["replacement"]:
+                    raise HTTPException(status_code=409, detail="Accept must use the currently supported replacement text.")
+            principal = request.state.principal
             session.add(RepairDecision(
                 finding_id=finding.id,
                 action=payload.action,
-                proposed_replacement=payload.replacement,
+                proposed_replacement=payload.replacement if payload.action != "manual" else None,
                 review_reason=payload.reason,
+                original_text=payload.content if payload.action == "manual" else None,
+                revised_text=payload.revised_content if payload.action == "manual" else None,
+                provenance="human_authored" if payload.action == "manual" else "evidence_backed",
+                workspace_id=workspace_id,
+                reviewer_user_id=principal.user.id if principal.role == "user" and principal.user else None,
             ))
             session.flush()
         return _read(session, audit)

@@ -8,6 +8,10 @@ export function buildReviewedCopy(original, findings, decisions, replacements) {
     const previous = latest.get(decision.finding_id);
     if (!previous || Date.parse(decision.created_at) >= Date.parse(previous.created_at)) latest.set(decision.finding_id, decision);
   }
+  const manual = [...latest.values()]
+    .filter((decision) => decision.action === "manual" && typeof decision.revised_text === "string" && decision.revised_text.trim())
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+  if (manual) return { content: manual.revised_text, applied: 1, unavailable: false };
   const findingIds = new Set(findings.map(({ id }) => id));
   const changes = replacements.flatMap((item) => {
     const decision = latest.get(item.finding_id);

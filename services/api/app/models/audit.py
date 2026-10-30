@@ -76,12 +76,17 @@ class FindingDecision(Base):
 class RepairDecision(Base):
     """Append-only reviewer decision on a currently supported repair proposal."""
     __tablename__ = "repair_decisions"
-    __table_args__ = (CheckConstraint("action IN ('accept', 'edit', 'reject')", name="ck_repair_decisions_action"),)
+    __table_args__ = (CheckConstraint("action IN ('accept', 'edit', 'reject', 'manual')", name="ck_repair_decisions_action"),)
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     finding_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("audit_findings.id", ondelete="CASCADE"), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
     proposed_replacement: Mapped[str | None] = mapped_column(String(500))
     review_reason: Mapped[str | None] = mapped_column(String(500))
+    original_text: Mapped[str | None] = mapped_column(Text)
+    revised_text: Mapped[str | None] = mapped_column(Text)
+    provenance: Mapped[str] = mapped_column(String(30), nullable=False, default="evidence_backed")
+    workspace_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
+    reviewer_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 

@@ -21,6 +21,21 @@ test("persisted repair decisions returned after refresh retain accept, edit, and
   assert.deepEqual(getRepairDecisionHistory(refreshedAudit), decisions);
 });
 
+test("persisted manual decisions retain provenance and revised copy for Step 7", () => {
+  const manual = {
+    id: "manual-1",
+    finding_id: "finding-1",
+    action: "manual",
+    proposed_replacement: null,
+    original_text: "The revolutionary product.",
+    revised_text: "The verified product.",
+    provenance: "human_authored",
+    review_reason: "Human-authored correction",
+    created_at: "2026-01-03T00:00:00Z",
+  };
+  assert.deepEqual(getRepairDecisionHistory({ repair_decisions: [manual] }), [manual]);
+});
+
 test("malformed or unsupported decision data is not rendered as persisted state", () => {
   assert.deepEqual(getRepairDecisionHistory(null), []);
   assert.deepEqual(getRepairDecisionHistory({ repair_decisions: [
