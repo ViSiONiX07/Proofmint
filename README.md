@@ -4,7 +4,7 @@
 
 ![Proofmint](apps/web/public/mint_proofmark_logo.png)
 
-Proofmint is an AI-powered pre-publication brand verification workspace. It checks marketing content against approved brand guidelines, terminology, and supporting claim records while keeping evidence review and final clearance under human control.
+Proofmint is a B2B pre-publication brand-verification and review platform for brand, content, legal and compliance teams. It checks marketing content against approved guidelines, terminology and supporting claim records while keeping evidence review and final clearance under human control. It is not a comprehensive autonomous semantic, legal or regulatory-verification engine.
 
 **[Open Proofmint](https://emicproofmint.xyz/)** · [Source code](https://github.com/ViSiONiX07/Proofmint)
 
@@ -21,6 +21,20 @@ Evidence-backed findings, intent-preserving supported corrections, human-control
 - Guest-first browsing with deferred authentication.
 - Email/password accounts, profile initials, secure sessions, authorization, and restricted Judge Mode.
 - Google OAuth remains implemented but is disabled for the current deployment.
+
+## Round 3 improvements
+
+### Evidence-Locked Findings
+
+Findings retain exact matched content spans, offsets, approved-rule provenance and source-document references. Where available, source page, document version and evidence excerpts are preserved. Independent verification reports `verified`, `uncertain` or `rejected`; unsupported or uncertain evidence is handled conservatively and is not presented as verified.
+
+### Intent-Preserving Repair and Human Review
+
+Automatic repair is limited to verified preferred-terminology mismatches with an approved replacement. Reviewers can Accept, Edit or Reject those proposals. When no safe supported replacement exists, they can create a human-authored manual repair. Original and revised text, provenance, workspace, finding, reviewer identity where available, timestamp and append-only history are retained. Re-evaluation is required before clearance.
+
+### Reliability, Evaluation and Ambiguity Radar
+
+The labelled evaluation uses a version-controlled synthetic dataset and an isolated in-memory database. It reports precision, recall when denominators exist, evidence outcomes, label agreement, run consistency and safe-repair validity. Ambiguity Radar applies a minimum repeated-decision threshold before reporting a score. These are deterministic benchmark and regression signals, not real-world accuracy claims.
 
 ## Technology and architecture
 
@@ -40,6 +54,37 @@ Evidence-backed findings, intent-preserving supported corrections, human-control
     docs/                     Design and Round 3 documentation
     samples/                  Illustrative data
     .env.example              Environment template
+
+```mermaid
+flowchart LR
+  Browser[Next.js frontend] -->|JSON, multipart, cookies| API[FastAPI /api/v1]
+  API --> Auth[Sessions, CSRF, authorization]
+  API --> DB[(PostgreSQL)]
+  API --> Store[Private PDF source store]
+  API --> PDF[PyMuPDF ingestion]
+  API --> Audit[Deterministic audit engine]
+  Audit --> Verify[Evidence verification]
+  Audit --> Repair[Automatic proposals + human decisions]
+  API --> Eval[Labelled synthetic evaluation]
+  DB --> Alembic[Alembic migrations]
+```
+
+`apps/web` contains the App Router UI and workflow helpers. `services/api/app` contains FastAPI routes, SQLAlchemy models, Pydantic schemas, authentication/session handling and processing services. `services/api/tests` and frontend `*.test.mjs` files provide regression coverage.
+
+## Feature inventory
+
+| Feature | What it does | Status | Limitations |
+|---|---|---|---|
+| PDF guideline ingestion | Validates bounded PDFs, stores private source bytes and extracts candidate statements | Implemented, bounded scope | Deterministic extraction is not full semantic rule extraction |
+| Facts and terminology CSV | Validates and transactionally imports evidence rows | Implemented | Narrow review schema and provenance model |
+| Evidence verification | Checks source integrity, citations, approvals and literal evidence matches | Implemented | Does not establish universal truth or legal compliance |
+| Audit engine | Finds configured literal phrases, terminology mismatches and exact fact matches | Implemented, limited scope | Not comprehensive autonomous semantic or legal verification |
+| Automatic repair | Proposes approved preferred-terminology replacements | Implemented, limited scope | No arbitrary AI rewriting |
+| Manual repair | Persists human-authored original/revised text and provenance | Implemented | Requires re-evaluation before clearance |
+| Judge Mode | Creates isolated credential-free `judge_demo` sessions and workspaces | Implemented | Not enterprise-grade RBAC or tenant administration |
+| Ambiguity Radar | Aggregates repeated review decisions after a threshold | Implemented, limited scope | Does not infer reviewer disagreement |
+| Labelled evaluation | Reports synthetic precision/recall and consistency signals | Implemented | Benchmark only; no production accuracy claim |
+| Google sign-in | OAuth remains behind configuration | Disabled for current deployment | Requires later provider/domain configuration |
 
 ## Prerequisites
 
@@ -142,7 +187,7 @@ Guests can explore public pages and the Studio introduction. Authentication is r
 
 **User:** Register or sign in with email/password, restore sessions after refresh, manage profile, access authorized workspaces, use the workflow, and sign out. The avatar uses first-name and surname initials.
 
-**Judge Mode:** Login as a Judge requires no personal credentials. It creates a restricted session tied to an isolated curated demonstration workspace. The avatar is JDG. Judges cannot access normal user workspaces, profiles, private documents, administrator functionality, or global configuration. Exiting invalidates the session.
+**Judge Mode:** Login as a Judge requires no personal credentials. It creates a restricted session tied to a fresh isolated `judge_demo` workspace. The avatar is JDG. Judges can choose sample files explicitly, but samples are not automatically ingested. Judges cannot access normal user workspaces, profiles, private documents, administrator functionality, or global configuration. Exiting invalidates the session.
 
 Google sign-in is currently unavailable; its disabled option explains why and does not initiate OAuth.
 
@@ -157,6 +202,16 @@ The versioned API is rooted at /api/v1.
 - /ambiguity-radar — persisted decision analysis.
 - /evaluation — labelled synthetic evaluation.
 - /workspaces/* — authorized restoration.
+
+Local Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). Production Swagger: [https://proofmint-q9ss.onrender.com/docs](https://proofmint-q9ss.onrender.com/docs). The canonical API prefix is `/api/v1`; endpoint names should be checked against the generated OpenAPI document.
+
+## Persistence and security boundaries
+
+Alembic is the schema authority. Configure a safe PostgreSQL target, run `alembic upgrade head` from `services/api`, then inspect `alembic current` and `alembic heads`. Important persisted entities include users, `AuthSession`, workspaces, guideline documents, candidate rules, imported facts and terms, audit runs, findings, finding decisions, repair decisions and clearance records.
+
+Normal users are restricted to owned workspaces. Judge sessions use isolated `judge_demo` workspaces and cannot access normal-user workspaces or another Judge session's workspace. Protected requests use server-side sessions, HttpOnly cookies, CSRF checks for state changes, expiration/revocation and authorization middleware. CORS is restricted to configured frontend origins with credentials.
+
+The service stores audit hashes, metadata, findings, provenance and review history rather than complete submitted marketing copy. Original guideline PDFs are stored in a private source directory, not a public static path. This is not a zero-retention system: operators must define retention, access, backup and deletion policies. Current boundaries are not a complete enterprise RBAC, SSO or tenant-administration product.
 
 ## Security
 
@@ -178,16 +233,29 @@ Protected operations require server-side sessions and ownership or role authoriz
 
 The intended architecture is Vercel for Next.js, Render for FastAPI, and Neon PostgreSQL where configured. Keep deployment credentials separate from frontend files.
 
+Current deployment URLs:
+
+- Frontend: [https://emicproofmint.xyz](https://emicproofmint.xyz)
+- Backend: [https://proofmint-q9ss.onrender.com](https://proofmint-q9ss.onrender.com)
+- Health: [https://proofmint-q9ss.onrender.com/api/v1/health](https://proofmint-q9ss.onrender.com/api/v1/health)
+- OpenAPI: [https://proofmint-q9ss.onrender.com/docs](https://proofmint-q9ss.onrender.com/docs)
+
+Vercel Production should use `NEXT_PUBLIC_API_URL=https://proofmint-q9ss.onrender.com`. This document does not claim that a dashboard, production migration or health check has been verified by this local repository review.
+
 **EMIC TECH** · Vivekananda Global University (NIAT)
 
 Keshav Modi · Sparsh Shrimal · Akshara Jain · Tanmay Singh Panwar · Dhananjay Dagar · Yuvraj Rathore
 
-Future scope includes multimodal and visual compliance, design-platform integrations, multilingual guidelines, advanced governance, and private deployment options.
+Completed R3 includes evidence-locked findings, bounded PDF ingestion, evidence and terminology review, deterministic supported repair, human-authored manual repair provenance, Judge workspace isolation, session-aware Guest onboarding, labelled synthetic evaluation and Ambiguity Radar.
+
+Known limitations include bounded deterministic extraction, literal/evidence-backed audit scope, synthetic rather than production evaluation, non-enterprise RBAC/SSO and disabled Google OAuth for the current deployment. Future scope includes multimodal and visual compliance, design-platform integrations, multilingual guidelines, advanced governance and private deployment options.
 
 ## Checks
 
 From apps/web: npm run test:workspace, npx tsc --noEmit, npm run lint.
 From services/api: python -m pytest -q.
+
+The latest verified focused local results were 64 frontend tests, 1 manual-repair test, 1 Judge guideline-ingestion regression and 19 existing audit tests. These counts do not claim that the entire backend suite passes; run the full backend command in the current environment.
 
 Proofmint — Nothing ships unproven.
 
