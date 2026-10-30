@@ -53,8 +53,13 @@ class RepairDecisionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     finding_id: UUID
-    action: Literal["accept", "edit", "reject"]
+    action: Literal["accept", "edit", "reject", "manual"]
     proposed_replacement: str | None
+    original_text: str | None
+    revised_text: str | None
+    provenance: str
+    workspace_id: UUID | None
+    reviewer_user_id: UUID | None
     review_reason: str | None
     created_at: datetime
 
@@ -115,13 +120,18 @@ class RepairRequest(BaseModel):
 
 
 class RepairDecisionCreate(BaseModel):
-    action: Literal["accept", "edit", "reject"]
+    action: Literal["accept", "edit", "reject", "manual"]
     content: str = Field(min_length=1, max_length=200_000)
     replacement: str | None = Field(default=None, max_length=500)
+    revised_content: str | None = Field(default=None, max_length=200_000)
     reason: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def validate_replacement(self):
+        if self.action == "manual":
+            if not self.revised_content or not self.revised_content.strip():
+                raise ValueError("Manual decisions require revised content.")
+            return self
         if self.action in {"accept", "edit"} and not (self.replacement or "").strip():
             raise ValueError("Accept and edit decisions require replacement text.")
         if self.action == "reject" and self.replacement is not None:

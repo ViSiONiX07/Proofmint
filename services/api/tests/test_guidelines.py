@@ -1,4 +1,5 @@
 import hashlib
+from types import SimpleNamespace
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -14,9 +15,10 @@ from sqlalchemy.pool import StaticPool
 from app.api.audits import get_audit_session
 from app.api.guidelines import get_guideline_db_session
 from app.core.config import settings
-from app.models import AuditFinding, AuditRun, Base, CandidateRule, GuidelineDocument, Workspace
+from app.models import AuditFinding, AuditRun, Base, CandidateRule, GuidelineDocument, User, Workspace
 from app.main import app
 from app.services.source_document_store import SourceDocumentStore, page_text
+from tests.auth_fixtures import install_authenticated_user
 
 
 class FakeSession:
@@ -64,9 +66,27 @@ class FakeSession:
 def guideline_database_session(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SOURCE_DOCUMENT_STORAGE_DIR", tmp_path / "source-documents")
     session = FakeSession()
+    auth_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(auth_engine)
     app.dependency_overrides[get_guideline_db_session] = lambda: session
+    original_enter = AsyncClient.__aenter__
+    async def authenticated_enter(client):
+        result = await original_enter(client)
+        engine = auth_engine
+        for override in app.dependency_overrides.values():
+            closure = getattr(override, "__closure__", None) or ()
+            for cell in closure:
+                value = cell.cell_contents
+                candidate = value if isinstance(value, type(auth_engine)) else getattr(value, "bind", None)
+                if candidate is not None and candidate is not auth_engine:
+                    engine = candidate
+                    break
+        install_authenticated_user(engine, client, email="guideline-user@example.test")
+        return result
+    monkeypatch.setattr(AsyncClient, "__aenter__", authenticated_enter)
     yield session
     app.dependency_overrides.pop(get_guideline_db_session, None)
+    auth_engine.dispose()
 
 
 def make_pdf(*pages: str) -> bytes:
@@ -170,6 +190,11 @@ async def test_exact_pdf_reupload_recovers_same_workspace_document_and_historica
             files = [("files", ("Northstar.pdf", original, "application/pdf"))]
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
+                install_authenticated_user(engine, client, email="guideline-reupload@example.test")
+                with Session(engine) as auth_db:
+                    user_id = auth_db.query(User).filter_by(email="guideline-reupload@example.test").one().id
+                session.get(Workspace, workspace_id).owner_user_id = user_id
+                session.commit()
                 wrong_copy = await client.post(f"/api/v1/audits/{audit_id}/verify-source-evidence?workspace_id={workspace_id}",
                     json={"content": content + " changed"})
                 assert wrong_copy.status_code == 409
@@ -256,6 +281,7 @@ async def test_guideline_remove_is_workspace_scoped_and_fails_closed_without_lif
         foreign_workspace_id = str(foreign_workspace.id)
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            install_authenticated_user(engine, client, email="guideline-remove@example.test")
             foreign = await client.post(f"/api/v1/guidelines/{document_id}/remove", params={"workspace_id": foreign_workspace_id})
             assert foreign.status_code == 404
             blocked = await client.post(f"/api/v1/guidelines/{document_id}/remove", params={"workspace_id": workspace_id})
@@ -465,7 +491,14 @@ async def test_upload_file_objects_are_closed(guideline_database_session):
 
     upload = StarletteUploadFile(filename="guide.pdf", file=BytesIO(make_pdf("close me")), headers={"content-type": "application/pdf"})
     from app.api.guidelines import ingest_guidelines
-    coroutine = ingest_guidelines([upload], guideline_database_session)
+    request = SimpleNamespace(state=SimpleNamespace(
+        principal=SimpleNamespace(
+            role="user",
+            session=SimpleNamespace(role="user", id=uuid4()),
+            user=SimpleNamespace(id=uuid4()),
+        )
+    ))
+    coroutine = ingest_guidelines(request=request, files=[upload], session=guideline_database_session, workspace_id=None)
     with pytest.raises(StopIteration):
         coroutine.send(None)
     assert upload.file.closed

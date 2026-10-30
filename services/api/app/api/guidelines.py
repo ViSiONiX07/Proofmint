@@ -186,10 +186,18 @@ async def ingest_guidelines(
         workspace_id = None
     workspace_is_new = workspace_id is None
     principal: Principal = request.state.principal
+    if principal.role == "judge":
+        workspace_kind = "judge_demo"
+        owner_user_id = None
+        owner_judge_session_id = principal.session.id
+    else:
+        workspace_kind = "session"
+        owner_user_id = principal.user.id if principal.user else None
+        owner_judge_session_id = None
     workspace = Workspace(
-        id=workspace_id or uuid4(), kind="session",
-        owner_user_id=principal.user.id if workspace_is_new and principal.role == "user" and principal.user else None,
-        owner_judge_session_id=principal.session.id if workspace_is_new and principal.role == "judge" else None,
+        id=workspace_id or uuid4(), kind=workspace_kind,
+        owner_user_id=owner_user_id if workspace_is_new else None,
+        owner_judge_session_id=owner_judge_session_id if workspace_is_new else None,
     )
     if not workspace_is_new:
         persisted_workspace = session.get(Workspace, workspace.id)

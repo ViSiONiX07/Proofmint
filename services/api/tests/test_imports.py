@@ -16,6 +16,7 @@ from app.models import Base
 from app.models.audit import AuditFinding, AuditRun
 from app.models.imports import ImportedFact, ImportedTerm
 from app.models.workspace import Workspace
+from tests.auth_fixtures import install_authenticated_user
 from uuid import UUID, uuid4
 
 
@@ -61,14 +62,22 @@ class FakeSession:
 
 async def upload(path, data, filename="records.csv"):
     fake = FakeSession()
+    auth_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(auth_engine)
     app.dependency_overrides[get_import_db_session] = lambda: fake
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            user_id, _ = install_authenticated_user(auth_engine, client, email="import-user@example.test")
+            fake.workspace.owner_user_id = user_id
+            with Session(auth_engine) as auth_db:
+                auth_db.add(Workspace(id=fake.workspace.id, kind="session", owner_user_id=user_id))
+                auth_db.commit()
             response = await client.post(path, data={"workspace_id": str(fake.workspace.id)}, files={"file": (filename, data, "text/csv")})
         return response, fake
     finally:
         app.dependency_overrides.pop(get_import_db_session, None)
+        auth_engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -265,13 +274,18 @@ async def test_file_and_row_limits_reject_before_persistence(monkeypatch):
 async def test_database_failure_returns_service_error_and_rolls_back():
     data = b"term\nProofmint\n"
     fake = FakeSession(fail=True)
+    auth_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(auth_engine)
     app.dependency_overrides[get_import_db_session] = lambda: fake
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            user_id, _ = install_authenticated_user(auth_engine, client, email="import-failure@example.test")
+            fake.workspace.owner_user_id = user_id
             response = await client.post("/api/v1/terms/import", data={"workspace_id": str(fake.workspace.id)}, files={"file": ("terms.csv", data)})
     finally:
         app.dependency_overrides.pop(get_import_db_session, None)
+        auth_engine.dispose()
     assert response.status_code == 503
     assert fake.did_rollback
     assert fake.records == []
@@ -367,6 +381,7 @@ async def test_csv_import_deduplicates_file_rows_and_preserves_review_statuses()
     )
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                install_authenticated_user(engine, client, email="import-dedup@example.test")
             first_facts = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts.csv", facts_csv, "text/csv")})
             assert first_facts.status_code == 200, first_facts.text
             assert first_facts.json()["summary"] == {
@@ -443,6 +458,7 @@ async def test_csv_batch_removal_is_selective_allows_reimport_and_preserves_hist
     corrected = b"approved_statement,claim_type\nCorrected claim,capability\n"
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            install_authenticated_user(engine, client, email="import-batch@example.test")
             first = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts-one.csv", facts_one, "text/csv")})
             second = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts-two.csv", facts_two, "text/csv")})
             terms = await client.post("/api/v1/terms/import", data={"workspace_id": workspace_id}, files={"file": ("terms.csv", terms_csv, "text/csv")})
@@ -529,6 +545,7 @@ async def test_csv_removal_rejects_cross_workspace_and_failed_writes():
     data = b"approved_statement,claim_type\nScoped claim,capability\n"
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            install_authenticated_user(engine, client, email="import-removal@example.test")
             imported = await client.post("/api/v1/facts/import", data={"workspace_id": own_id}, files={"file": ("facts.csv", data, "text/csv")})
             digest = (await client.get("/api/v1/facts", params={"workspace_id": own_id})).json()["items"][0]["source_sha256"]
             cross = await client.post(f"/api/v1/imports/facts/{digest}/remove", params={"workspace_id": other_id})

@@ -1,4 +1,4 @@
-const ACTIONS = new Set(["accept", "edit", "reject"]);
+const ACTIONS = new Set(["accept", "edit", "reject", "manual"]);
 
 /** Validate the append-only repair history returned when an audit is refreshed. */
 export function getRepairDecisionHistory(audit) {
@@ -10,6 +10,9 @@ export function getRepairDecisionHistory(audit) {
     && typeof decision.finding_id === "string"
     && ACTIONS.has(decision.action)
     && (decision.proposed_replacement === null || typeof decision.proposed_replacement === "string")
+    && (decision.original_text === undefined || decision.original_text === null || typeof decision.original_text === "string")
+    && (decision.revised_text === undefined || decision.revised_text === null || typeof decision.revised_text === "string")
+    && (decision.provenance === undefined || typeof decision.provenance === "string")
     && typeof decision.created_at === "string"
     && !Number.isNaN(Date.parse(decision.created_at))
   );
