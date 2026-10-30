@@ -8,12 +8,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.audits import get_audit_session
 from app.api.import_review import get_import_review_db_session
 from app.api.imports import get_import_db_session
 from app.main import app
 from app.models import Base
+from app.models.audit import AuditFinding, AuditRun
+from app.models.imports import ImportedFact, ImportedTerm
 from app.models.workspace import Workspace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 
 class FakeSession:
@@ -280,6 +283,57 @@ def test_openapi_registers_both_csv_import_endpoints():
     assert "/api/v1/terms/import" in paths
 
 
+def test_remove_import_batch_is_workspace_scoped_and_preserves_unrelated_rows():
+    from app.api.imports import get_import_db_session
+    from app.models.imports import ImportedFact
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    def database_session():
+        with factory() as session:
+            yield session
+    app.dependency_overrides[get_import_db_session] = database_session
+    with factory() as session:
+        first, other = Workspace(kind="session"), Workspace(kind="session")
+        session.add_all([first, other]); session.flush()
+        digest, other_digest = "a" * 64, "b" * 64
+        first_record = ImportedFact(workspace_id=first.id, claim_type="capability", approved_statement="First", source_filename="facts.csv", source_row_number=2, source_sha256=digest, review_status="approved")
+        same_batch = ImportedFact(workspace_id=first.id, claim_type="capability", approved_statement="Second", source_filename="facts.csv", source_row_number=3, source_sha256=digest)
+        unrelated = ImportedFact(workspace_id=first.id, claim_type="capability", approved_statement="Unrelated", source_filename="other.csv", source_row_number=2, source_sha256=other_digest)
+        foreign = ImportedFact(workspace_id=other.id, claim_type="capability", approved_statement="Foreign", source_filename="facts.csv", source_row_number=2, source_sha256="c" * 64)
+        session.add_all([first_record, same_batch, unrelated, foreign]); session.commit()
+        workspace_id, foreign_workspace_id = str(first.id), str(other.id)
+    try:
+        from fastapi import HTTPException
+        from app.api.imports import _remove_import_batch
+        with factory() as session:
+            with pytest.raises(HTTPException) as denied:
+                _remove_import_batch(ImportedFact, "a" * 64, uuid4(), session, "facts")
+            assert denied.value.status_code == 404
+        # A real second workspace exists, but the batch digest does not occur there.
+        with factory() as session:
+            with pytest.raises(HTTPException) as foreign_denied:
+                _remove_import_batch(ImportedFact, digest, UUID(foreign_workspace_id), session, "facts")
+            assert foreign_denied.value.status_code == 404
+        with factory() as session:
+            removed = _remove_import_batch(ImportedFact, digest, UUID(workspace_id), session, "facts")
+            assert removed["removed_count"] == 2
+        # A new session verifies both the committed status changes and retained content.
+        with factory() as session:
+            records = session.query(ImportedFact).order_by(ImportedFact.approved_statement).all()
+            assert {r.approved_statement: r.review_status for r in records} == {
+                "First": "rejected", "Second": "rejected", "Unrelated": "pending_review", "Foreign": "pending_review",
+            }
+            assert {r.approved_statement for r in records} == {"First", "Second", "Unrelated", "Foreign"}
+        with factory() as session:
+            assert _remove_import_batch(ImportedFact, digest, UUID(workspace_id), session, "facts")["removed_count"] == 0
+    finally:
+        app.dependency_overrides.pop(get_import_db_session, None)
+        Base.metadata.drop_all(engine); engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_csv_import_deduplicates_file_rows_and_preserves_review_statuses():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -358,3 +412,195 @@ async def test_csv_import_deduplicates_file_rows_and_preserves_review_statuses()
         app.dependency_overrides.pop(get_import_review_db_session, None)
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+
+def _import_database():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    def database_session():
+        with factory() as session:
+            yield session
+
+    return engine, factory, database_session
+
+
+@pytest.mark.asyncio
+async def test_csv_batch_removal_is_selective_allows_reimport_and_preserves_history():
+    engine, factory, database_session = _import_database()
+    app.dependency_overrides[get_import_db_session] = database_session
+    app.dependency_overrides[get_import_review_db_session] = database_session
+    app.dependency_overrides[get_audit_session] = database_session
+    with factory() as session:
+        workspace = Workspace(kind="session")
+        session.add(workspace)
+        session.commit()
+        workspace_id = str(workspace.id)
+    facts_one = b"approved_statement,claim_type\nFirst batch claim,capability\n"
+    facts_two = b"approved_statement,claim_type\nSecond batch claim,capability\n"
+    terms_csv = b"term,preferred_form\nProofMint,Proofmint\n"
+    corrected = b"approved_statement,claim_type\nCorrected claim,capability\n"
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            first = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts-one.csv", facts_one, "text/csv")})
+            second = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts-two.csv", facts_two, "text/csv")})
+            terms = await client.post("/api/v1/terms/import", data={"workspace_id": workspace_id}, files={"file": ("terms.csv", terms_csv, "text/csv")})
+            assert first.status_code == second.status_code == terms.status_code == 200
+            listed_facts = (await client.get("/api/v1/facts", params={"workspace_id": workspace_id, "limit": 100})).json()["items"]
+            listed_terms = (await client.get("/api/v1/terms", params={"workspace_id": workspace_id, "limit": 100})).json()["items"]
+            first_item = next(item for item in listed_facts if item["approved_statement"] == "First batch claim")
+            second_item = next(item for item in listed_facts if item["approved_statement"] == "Second batch claim")
+            term_item = listed_terms[0]
+            assert (await client.post(f"/api/v1/facts/{first_item['id']}/approve", params={"workspace_id": workspace_id})).status_code == 200
+            assert (await client.post(f"/api/v1/terms/{term_item['id']}/approve", params={"workspace_id": workspace_id})).status_code == 200
+
+            created = await client.post("/api/v1/audits", json={"workspace_id": workspace_id, "content": "First batch claim and ProofMint"})
+            assert created.status_code == 201, created.text
+            audit_id = created.json()["id"]
+            finding_ids = {finding["id"] for finding in created.json()["findings"]}
+            assert finding_ids
+
+            removed_facts = await client.post(
+                f"/api/v1/imports/facts/{first_item['source_sha256']}/remove",
+                params={"workspace_id": workspace_id},
+            )
+            assert removed_facts.status_code == 200, removed_facts.text
+            assert removed_facts.json()["removed_count"] == 1
+            removed_terms = await client.post(
+                f"/api/v1/imports/terms/{term_item['source_sha256']}/remove",
+                params={"workspace_id": workspace_id},
+            )
+            assert removed_terms.status_code == 200
+            assert removed_terms.json()["removed_count"] == 1
+
+            remaining_facts = (await client.get("/api/v1/facts", params={"workspace_id": workspace_id, "limit": 100, "status": "pending_review"})).json()["items"]
+            remaining_approved = (await client.get("/api/v1/facts", params={"workspace_id": workspace_id, "limit": 100, "status": "approved"})).json()["items"]
+            assert [item["approved_statement"] for item in remaining_facts] == ["Second batch claim"]
+            assert remaining_approved == []
+            remaining_terms = (await client.get("/api/v1/terms", params={"workspace_id": workspace_id, "limit": 100, "status": "approved"})).json()["items"]
+            assert remaining_terms == []
+
+            replacement = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts-one.csv", facts_one, "text/csv")})
+            assert replacement.status_code == 200, replacement.text
+            assert replacement.json()["summary"]["rows_imported"] == 1
+            corrected_import = await client.post("/api/v1/facts/import", data={"workspace_id": workspace_id}, files={"file": ("facts-one-corrected.csv", corrected, "text/csv")})
+            assert corrected_import.json()["summary"]["rows_imported"] == 1
+
+            later = await client.post("/api/v1/audits", json={"workspace_id": workspace_id, "content": "First batch claim and ProofMint"})
+            assert later.status_code == 201
+            assert later.json()["findings"] == [] or all(
+                finding.get("fact_id") != first_item["id"] and finding.get("term_id") != term_item["id"]
+                for finding in later.json()["findings"]
+            )
+            approved_later = await client.post(f"/api/v1/facts/{second_item['id']}/approve", params={"workspace_id": workspace_id})
+            assert approved_later.status_code == 200
+            with_unrelated = await client.post("/api/v1/audits", json={"workspace_id": workspace_id, "content": "Second batch claim"})
+            assert with_unrelated.status_code == 201
+            assert any(finding.get("fact_id") == second_item["id"] for finding in with_unrelated.json()["findings"])
+
+            historical = await client.get(f"/api/v1/audits/{audit_id}", params={"workspace_id": workspace_id})
+            assert historical.status_code == 200
+            assert {finding["id"] for finding in historical.json()["findings"]} == finding_ids
+            with factory() as session:
+                assert session.get(AuditRun, UUID(audit_id)) is not None
+                assert session.query(AuditFinding).filter(AuditFinding.audit_id == UUID(audit_id)).count() == len(finding_ids)
+                assert session.get(ImportedFact, UUID(first_item["id"])) is not None
+                assert session.get(ImportedTerm, UUID(term_item["id"])) is not None
+                assert session.get(ImportedFact, UUID(second_item["id"])).review_status == "approved"
+    finally:
+        app.dependency_overrides.pop(get_import_db_session, None)
+        app.dependency_overrides.pop(get_import_review_db_session, None)
+        app.dependency_overrides.pop(get_audit_session, None)
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_csv_removal_rejects_cross_workspace_and_failed_writes():
+    engine, factory, database_session = _import_database()
+    app.dependency_overrides[get_import_db_session] = database_session
+    app.dependency_overrides[get_import_review_db_session] = database_session
+    with factory() as session:
+        own, other = Workspace(kind="session"), Workspace(kind="session")
+        session.add_all([own, other])
+        session.commit()
+        own_id, other_id = str(own.id), str(other.id)
+    data = b"approved_statement,claim_type\nScoped claim,capability\n"
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            imported = await client.post("/api/v1/facts/import", data={"workspace_id": own_id}, files={"file": ("facts.csv", data, "text/csv")})
+            digest = (await client.get("/api/v1/facts", params={"workspace_id": own_id})).json()["items"][0]["source_sha256"]
+            cross = await client.post(f"/api/v1/imports/facts/{digest}/remove", params={"workspace_id": other_id})
+            assert cross.status_code == 404
+            invalid = await client.post(f"/api/v1/imports/facts/{'z' * 64}/remove", params={"workspace_id": own_id})
+            assert invalid.status_code == 404
+            listed = (await client.get("/api/v1/facts", params={"workspace_id": own_id, "status": "pending_review"})).json()["items"]
+            assert len(listed) == 1
+            assert listed[0]["review_status"] == "pending_review"
+            assert imported.status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_import_db_session, None)
+        app.dependency_overrides.pop(get_import_review_db_session, None)
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+def test_csv_removal_database_failure_does_not_report_success():
+    from fastapi import HTTPException
+    from app.api.imports import _remove_import_batch
+
+    engine, factory, _database_session = _import_database()
+    with factory() as session:
+        workspace = Workspace(kind="session")
+        session.add(workspace)
+        session.flush()
+        record = ImportedFact(
+            workspace_id=workspace.id, claim_type="capability", approved_statement="Keep me",
+            source_filename="facts.csv", source_row_number=2, source_sha256="a" * 64,
+            review_status="approved",
+        )
+        session.add(record)
+        session.commit()
+        workspace_id, record_id = workspace.id, record.id
+
+    class FailingSession:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def in_transaction(self):
+            return False
+
+        def begin(self):
+            class Begun:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, exc_type, exc, tb):
+                    return False
+
+            return Begun()
+
+        def get(self, model, identity):
+            return self._inner.get(model, identity)
+
+        def scalars(self, statement):
+            return self._inner.scalars(statement)
+
+        def flush(self):
+            raise SQLAlchemyError("simulated removal failure")
+
+        def rollback(self):
+            self._inner.rollback()
+
+    with factory() as session:
+        failing = FailingSession(session)
+        with pytest.raises(HTTPException) as error:
+            _remove_import_batch(ImportedFact, "a" * 64, workspace_id, failing, "facts")
+        assert error.value.status_code == 503
+    with factory() as session:
+        persisted = session.get(ImportedFact, record_id)
+        assert persisted is not None
+        assert persisted.review_status == "approved"
+    engine.dispose()
+    Base.metadata.drop_all(engine)

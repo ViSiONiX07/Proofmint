@@ -14,6 +14,7 @@ def test_approved_restricted_rule_matches_exact_quoted_phrase_with_offsets_and_s
     assert findings[0]["matched_phrase"] == "unlimited protection"
     assert findings[0]["match_start"] == 4 and findings[0]["match_end"] == 24
     assert findings[0]["source_filename"] == "Brand.pdf" and findings[0]["source_page"] == 4
+    assert "verification_status" not in findings[0]  # verification is a separate pipeline stage
 
 
 def test_approved_rule_without_explicit_quoted_restriction_is_unevaluated():
@@ -39,3 +40,10 @@ def test_no_approved_evidence_returns_limits_without_success_claim():
     findings, supported, unevaluated, limits = evaluate_copy("Any text", [], [], [])
     assert findings == [] and supported == 0 and unevaluated == 0
     assert len(limits) >= 3
+
+
+def test_preferred_form_is_not_reported_as_a_terminology_violation():
+    term = SimpleNamespace(id=uuid4(), term="ProofMint", preferred_form="Proofmint", source_filename="terms.csv")
+    findings, supported, _, _ = evaluate_copy("Use Proofmint today.", [], [], [term])
+    assert findings == []
+    assert supported == 1

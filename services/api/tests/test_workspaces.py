@@ -15,6 +15,7 @@ from app.api.guidelines import get_guideline_db_session
 from app.api.import_review import get_import_review_db_session
 from app.api.imports import get_import_db_session
 from app.api.workspaces import get_workspace_session
+from app.core.config import settings
 from app.main import app
 from app.models import Base, ImportedFact, Workspace
 
@@ -22,14 +23,15 @@ from app.models import Base, ImportedFact, Workspace
 def _pdf() -> bytes:
     document = pymupdf.open()
     page = document.new_page()
-    page.insert_text((72, 72), "Never use “guaranteed” claims in product advertising.")
+    page.insert_text((72, 72), "Never use “guaranteed” claims in product advertising.\nNever use “shared” in marketing materials.")
     content = document.tobytes()
     document.close()
     return content
 
 
 @pytest.mark.asyncio
-async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_data():
+async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "SOURCE_DOCUMENT_STORAGE_DIR", tmp_path / "source-documents")
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
 
@@ -71,7 +73,7 @@ async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_da
 
             rules_a = await client.get(f"/api/v1/guidelines/{document_a}/rules", params={"workspace_id": workspace_a})
             rules_b = await client.get(f"/api/v1/guidelines/{document_b}/rules", params={"workspace_id": workspace_b})
-            assert rules_a.json()["total"] == rules_b.json()["total"] == 1
+            assert rules_a.json()["total"] == rules_b.json()["total"] == 2
             rule_a, rule_b = rules_a.json()["items"][0], rules_b.json()["items"][0]
             assert (await client.post(f"/api/v1/rules/{rule_a['id']}/approve", params={"workspace_id": workspace_a})).status_code == 200
             assert (await client.post(f"/api/v1/rules/{rule_b['id']}/approve", params={"workspace_id": workspace_b})).status_code == 200
@@ -119,7 +121,7 @@ async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_da
             assert all(finding["fact_id"] != fact_b["id"] for finding in audit_body["findings"])
             audit_id = audit_body["id"]
             assert (await client.get(f"/api/v1/audits/{audit_id}", params={"workspace_id": workspace_b})).status_code == 404
-            actionable = next((item for item in audit_body["findings"] if item["status"] == "pending_review"), None)
+            actionable = next((item for item in audit_body["findings"] if item["status"] == "pending_review" and item["term_id"]), None)
             assert actionable is not None, {"findings": audit_body["findings"], "term_a": term_a}
             assert (await client.post(
                 f"/api/v1/audits/{audit_id}/findings/{actionable['id']}/decisions",
@@ -127,8 +129,14 @@ async def test_workspaces_isolate_documents_imports_reviews_audits_and_legacy_da
             )).status_code == 404
             assert (await client.post(
                 f"/api/v1/audits/{audit_id}/findings/{actionable['id']}/decisions",
-                params={"workspace_id": workspace_a}, json={"action": "dismiss"},
+                params={"workspace_id": workspace_a}, json={"action": "dismiss", "reason": "Reviewer note in workspace A."},
             )).status_code == 200
+            radar_a = await client.get("/api/v1/ambiguity-radar", params={"workspace_id": workspace_a})
+            radar_b = await client.get("/api/v1/ambiguity-radar", params={"workspace_id": workspace_b})
+            assert radar_a.status_code == radar_b.status_code == 200
+            assert all(item["decision_count"] == 0 for item in radar_a.json()["rules"])
+            assert all(item["decision_count"] == 0 for item in radar_b.json()["rules"])
+            assert all(item["decision_count"] == 0 for item in radar_b.json()["rules"])
             assert (await client.post(
                 f"/api/v1/audits/{audit_id}/clearance",
                 params={"workspace_id": workspace_b}, json={"decision": "cleared"},

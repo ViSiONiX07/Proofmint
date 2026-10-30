@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:workspace": "node --test lib/workspace-session.test.mjs"
+    "test:workspace": "node --test lib/workspace-session.test.mjs lib/audit-session.test.mjs lib/studio-workflow.test.mjs lib/workflow-session.test.mjs lib/marketing-copy-example.test.mjs lib/repair-preview.test.mjs lib/repair-decisions.test.mjs lib/repair-workspace.test.mjs lib/ambiguity-radar.test.mjs lib/final-audit.test.mjs lib/extraction-revision.test.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

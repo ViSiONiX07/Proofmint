@@ -26,6 +26,8 @@ def evaluate_copy(content: str, rules: list, facts: list, terms: list) -> tuple[
                         "matched_phrase": match.group(), "match_start": match.start(), "match_end": match.end(),
                         "explanation": "This literal phrase appears in an approved rule that explicitly prohibits or restricts it.",
                         "suggested_correction": None, "source_filename": rule.document.source_filename,
+                        "source_document_id": getattr(rule.document, "id", None),
+                        "source_document_sha256": getattr(rule.document, "source_sha256", None),
                         "source_page": rule.source_page, "source_start_offset": rule.source_start_offset,
                         "source_end_offset": rule.source_end_offset, "evidence_excerpt": rule.source_excerpt,
                         "status": "pending_review", "fact_id": None, "term_id": None,
@@ -38,6 +40,8 @@ def evaluate_copy(content: str, rules: list, facts: list, terms: list) -> tuple[
         if term.preferred_form and term.preferred_form != term.term:
             supported += 1
             for match in re.finditer(re.escape(term.term), content, re.I):
+                if match.group() == term.preferred_form:
+                    continue
                 findings.append({
                     "finding_type": "preferred_terminology", "rule_id": None,
                     "matched_phrase": match.group(), "match_start": match.start(), "match_end": match.end(),
@@ -46,6 +50,7 @@ def evaluate_copy(content: str, rules: list, facts: list, terms: list) -> tuple[
                     "source_page": None, "source_start_offset": None, "source_end_offset": None,
                     "evidence_excerpt": f"{term.term} → {term.preferred_form}", "status": "pending_review",
                     "fact_id": None, "term_id": term.id,
+                    "source_document_id": None, "source_document_sha256": None,
                 })
 
     for fact in facts:
@@ -63,6 +68,7 @@ def evaluate_copy(content: str, rules: list, facts: list, terms: list) -> tuple[
                 "suggested_correction": None, "source_filename": fact.source_filename, "source_page": None,
                 "source_start_offset": None, "source_end_offset": None,
                 "evidence_excerpt": fact.approved_statement[:1000], "status": "informational", "fact_id": fact.id, "term_id": None,
+                "source_document_id": None, "source_document_sha256": None,
             })
     if not facts:
         limitations.append("No approved factual statements were available for exact-match comparison.")

@@ -3,20 +3,30 @@
 import hashlib
 import logging
 from collections.abc import Generator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pymupdf
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.auth import Principal, require_workspace_access
 from app.core.database import DatabaseNotConfiguredError, get_db_session
 from app.models.guideline import CandidateRule, GuidelineDocument
 from app.models.workspace import Workspace
-from app.services.candidate_extraction import extract_candidate_rules
+from app.services.candidate_extraction import candidate_signature, extract_candidate_rules
+from app.services.extraction_refresh import (
+    ExtractionRefreshError,
+    build_extraction_revision_preview,
+    create_extraction_revision,
+)
+from app.services.source_document_store import SourceDocumentError, SourceDocumentStore, page_text
 from app.schemas.guideline import (
     ExtractedPage,
+    ExtractionRevisionPreview,
+    ExtractionRevisionRead,
     FileOutcome,
     GuidelineExtraction,
     GuidelineIngestionResponse,
@@ -149,25 +159,47 @@ def _extract_pdf(filename: str, content_type: str | None, data: bytes) -> Guidel
         "Per-file, aggregate, and page limits are 10 MiB, 20 MiB, and 200 pages by default. "
         "Multipart framing may add up to 256 KiB to the aggregate request-body cap. "
         "Page offsets are zero-based character offsets into that page's returned text; end offsets are exclusive. "
-        "SHA-256 identifies the exact uploaded bytes. Successful PDF metadata is persisted together in one "
-        "transaction; PDF bytes and extracted text are not stored. A database failure rolls back every document "
+        "SHA-256 identifies the exact uploaded bytes. Original PDFs are retained in private server-side storage; "
+        "they are never served from a public URL. Existing workspaces may be supplied to add a new immutable "
+        "document version or recover a missing source by exact hash. Successful PDF metadata is persisted together in one "
+        "transaction; extracted text is not retained as a complete document. A database failure rolls back every document "
         "and candidate from the request and returns 503. Candidate rules are deterministic review suggestions "
         "and always start as pending_review; extraction does not approve rules or verify document claims."
     ),
     responses={413: {"description": "The request exceeds the configured file-count limit."}},
 )
 async def ingest_guidelines(
+    request: Request,
     files: list[UploadFile] = File(..., description="One or more guideline PDFs; max 5."),
     session: Session = Depends(get_guideline_db_session),
+    workspace_id: UUID | None = Form(default=None, description="Existing workspace for versioned uploads and source recovery."),
 ):
-    """Extract PDF text and persist successful documents' metadata atomically."""
+    """Retain original PDFs privately and persist immutable document versions."""
     if len(files) > settings.GUIDELINE_MAX_FILES:
         for upload in files:
             upload.file.close()
         raise HTTPException(status_code=413, detail="Too many files; request exceeds the configured file-count limit.")
 
     results: list[FileOutcome] = []
-    workspace = Workspace(id=uuid4(), kind="session")
+    # Direct unit callers see FastAPI's Form marker as the Python default.
+    if not isinstance(workspace_id, UUID):
+        workspace_id = None
+    workspace_is_new = workspace_id is None
+    principal: Principal = request.state.principal
+    workspace = Workspace(
+        id=workspace_id or uuid4(), kind="session",
+        owner_user_id=principal.user.id if workspace_is_new and principal.role == "user" and principal.user else None,
+        owner_judge_session_id=principal.session.id if workspace_is_new and principal.role == "judge" else None,
+    )
+    if not workspace_is_new:
+        persisted_workspace = session.get(Workspace, workspace.id)
+        try:
+            require_workspace_access(session, workspace.id, principal)
+        except HTTPException:
+            raise HTTPException(status_code=404, detail="Workspace was not found.")
+        workspace = persisted_workspace
+        session.commit()
+    source_store = SourceDocumentStore()
     documents_to_persist: list[tuple[GuidelineExtraction, GuidelineDocument, list[CandidateRule]]] = []
     total_bytes = 0
     for upload in files:
@@ -179,6 +211,32 @@ async def ingest_guidelines(
             data = await _read_bounded(upload, remaining)
             total_bytes += len(data)
             extraction = _extract_pdf(filename, upload.content_type, data)
+
+            # Recover the original immutable row only for the exact same bytes in
+            # the same workspace. A new PDF always gets its own document/rule IDs.
+            existing_documents = []
+            if not workspace_is_new:
+                existing_documents = list(session.scalars(select(GuidelineDocument).where(
+                    GuidelineDocument.workspace_id == workspace.id,
+                    GuidelineDocument.source_sha256 == extraction.sha256,
+                ).order_by(GuidelineDocument.extraction_revision, GuidelineDocument.created_at, GuidelineDocument.id)))
+            if existing_documents:
+                existing_document = existing_documents[0]
+                for lineage_document in existing_documents:
+                    if lineage_document.file_size_bytes != len(data) or lineage_document.page_count != extraction.page_count:
+                        raise IngestionError("source_metadata_mismatch", "The uploaded source matches a stored hash but its recorded metadata is inconsistent.")
+                was_present = source_store.object_exists(workspace.id, existing_document.id, extraction.sha256)
+                # Every extraction revision shares these bytes. Restore a missing object for
+                # each revision so a later refresh can still verify the newest revision.
+                for lineage_document in existing_documents:
+                    source_store.retain(workspace.id, lineage_document.id, extraction.sha256, data)
+                extraction.document_id = existing_document.id
+                extraction.created_at = existing_document.created_at
+                extraction.candidate_rule_count = len(existing_document.candidate_rules)
+                extraction.retention_status = "already_retained" if was_present else "restored"
+                results.append(FileOutcome(filename=filename, status="success", extraction=extraction))
+                continue
+
             try:
                 candidates = extract_candidate_rules(
                     (page.page_number, page.text) for page in extraction.pages
@@ -189,11 +247,14 @@ async def ingest_guidelines(
                     "candidate_extraction_failed", "Candidate rules could not be extracted from this PDF."
                 ) from None
             document = GuidelineDocument(
+                id=uuid4(),
                 workspace_id=workspace.id,
                 source_filename=extraction.filename,
                 source_sha256=extraction.sha256,
                 file_size_bytes=extraction.size_bytes,
                 page_count=extraction.page_count,
+                extraction_revision=1,
+                extraction_signature=candidate_signature(candidates),
             )
             candidate_rows = [
                 CandidateRule(
@@ -207,8 +268,14 @@ async def ingest_guidelines(
                 )
                 for candidate in candidates
             ]
+            source_store.retain(workspace.id, document.id, extraction.sha256, data)
+            extraction.retention_status = "retained"
             documents_to_persist.append((extraction, document, candidate_rows))
             results.append(FileOutcome(filename=filename, status="success", extraction=extraction))
+        except SourceDocumentError as exc:
+            code = exc.code
+            message = "The source PDF could not be retained or verified securely."
+            results.append(FileOutcome(filename=filename, status="error", error_code=code, message=message))
         except IngestionError as exc:
             results.append(FileOutcome(filename=filename, status="error", error_code=exc.code, message=exc.message))
             total_bytes += exc.bytes_read
@@ -228,9 +295,12 @@ async def ingest_guidelines(
             upload.file.close()
 
     if documents_to_persist:
+        if not workspace_is_new:
+            session.commit()
         try:
             with session.begin():
-                session.add(workspace)
+                if workspace_is_new:
+                    session.add(workspace)
                 session.flush()
                 session.add_all([document for _, document, _ in documents_to_persist])
                 session.flush()
@@ -258,7 +328,7 @@ async def ingest_guidelines(
 
     succeeded = sum(result.status == "success" for result in results)
     return GuidelineIngestionResponse(
-        workspace_id=workspace.id if documents_to_persist else None,
+        workspace_id=workspace.id if documents_to_persist or not workspace_is_new else None,
         summary=IngestionSummary(
             files_received=len(files),
             files_succeeded=succeeded,
@@ -267,3 +337,101 @@ async def ingest_guidelines(
         ),
         results=results,
     )
+
+
+def _workspace_document(session: Session, document_id: UUID, workspace_id: UUID) -> GuidelineDocument:
+    document = session.get(GuidelineDocument, document_id)
+    if document is None or document.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Guideline document was not found.")
+    return document
+
+
+@router.get(
+    "/guidelines/{document_id}/extraction-revision",
+    response_model=ExtractionRevisionPreview,
+    summary="Preview a corrected re-extraction of a retained guideline source",
+    description=(
+        "Read-only. Re-runs the current deterministic extractor against the retained original "
+        "PDF and compares the result with the stored rules by source page and character span. "
+        "Each comparison is unchanged, changed, added, or removed. Nothing is written, no rule "
+        "is approved, and no historical record is altered. The comparison targets the newest "
+        "rule-set revision of this source, whichever revision is named."
+    ),
+)
+def preview_extraction_revision(
+    document_id: UUID,
+    workspace_id: UUID,
+    session: Session = Depends(get_guideline_db_session),
+):
+    document = _workspace_document(session, document_id, workspace_id)
+    try:
+        return build_extraction_revision_preview(session, document)
+    except ExtractionRefreshError as exc:
+        raise HTTPException(status_code=409, detail=exc.detail) from None
+    except SQLAlchemyError as exc:
+        session.rollback()
+        logger.error("Extraction refresh preview failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Guideline rules could not be read for a refresh preview.") from None
+
+
+@router.post(
+    "/guidelines/{document_id}/remove",
+    summary="Deactivate a persisted guideline document",
+    description=(
+        "Guideline deactivation is unavailable until the database has a persisted document "
+        "lifecycle field. No document or historical audit data is changed by this endpoint."
+    ),
+    responses={404: {"description": "Guideline document not found or not in this workspace"}, 501: {"description": "Persisted lifecycle state requires a schema migration"}},
+)
+def remove_guideline_document(
+    document_id: UUID,
+    workspace_id: UUID,
+    session: Session = Depends(get_guideline_db_session),
+):
+    _workspace_document(session, document_id, workspace_id)
+    raise HTTPException(
+        status_code=501,
+        detail="Guideline deactivation requires a persisted lifecycle schema change; no data was changed.",
+    )
+
+
+
+@router.post(
+    "/guidelines/{document_id}/extraction-revision",
+    response_model=ExtractionRevisionRead,
+    status_code=201,
+    summary="Create an immutable extraction revision from the retained source PDF",
+    description=(
+        "Stores the corrected rule set as a new immutable revision of the same source bytes. "
+        "The earlier revision keeps its rules, human decisions, and every historical audit "
+        "reference. A candidate identical to an already-reviewed rule on the same page and "
+        "span keeps that decision; every other candidate starts as pending_review and does not "
+        "affect audits until a human approves it. Repeating the request for the same source and "
+        "extractor returns 200 with the existing revision and writes nothing. Requires the exact "
+        "retained original PDF: a missing or hash-mismatched source is refused with 409 and the "
+        "recovery path."
+    ),
+)
+def create_extraction_revision_route(
+    document_id: UUID,
+    response: Response,
+    workspace_id: UUID,
+    session: Session = Depends(get_guideline_db_session),
+):
+    try:
+        with session.begin():
+            document = _workspace_document(session, document_id, workspace_id)
+            result = create_extraction_revision(session, document)
+    except ExtractionRefreshError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=exc.detail) from None
+    except SQLAlchemyError as exc:
+        session.rollback()
+        logger.error("Extraction revision transaction failed (%s)", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="The refreshed extraction revision could not be persisted; no revision was created.",
+        ) from None
+    if result["already_existed"]:
+        response.status_code = 200
+    return result

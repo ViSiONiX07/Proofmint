@@ -7,10 +7,16 @@ import pymupdf
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import create_engine, select, func
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
+from app.api.audits import get_audit_session
 from app.api.guidelines import get_guideline_db_session
-from app.models.guideline import CandidateRule, GuidelineDocument
+from app.core.config import settings
+from app.models import AuditFinding, AuditRun, Base, CandidateRule, GuidelineDocument, Workspace
 from app.main import app
+from app.services.source_document_store import SourceDocumentStore, page_text
 
 
 class FakeSession:
@@ -55,7 +61,8 @@ class FakeSession:
 
 
 @pytest.fixture(autouse=True)
-def guideline_database_session():
+def guideline_database_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "SOURCE_DOCUMENT_STORAGE_DIR", tmp_path / "source-documents")
     session = FakeSession()
     app.dependency_overrides[get_guideline_db_session] = lambda: session
     yield session
@@ -113,6 +120,152 @@ async def test_extract_single_page_sha_and_span_offsets(guideline_database_sessi
     for span in page["spans"]:
         assert page["text"][span["start_offset"]:span["end_offset"]] == span["text"]
         assert span["page_number"] == 1
+    assert item["retention_status"] == "retained"
+    assert SourceDocumentStore().read_verified(document) == original
+
+
+@pytest.mark.asyncio
+async def test_exact_pdf_reupload_recovers_same_workspace_document_and_historical_audit(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "SOURCE_DOCUMENT_STORAGE_DIR", tmp_path / "private-sources")
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    workspace_id, document_id, audit_id = uuid4(), uuid4(), uuid4()
+    original = make_pdf('Never say "guaranteed".')
+    parsed = pymupdf.open(stream=original, filetype="pdf")
+    excerpt = page_text(parsed[0])
+    parsed.close()
+    digest = hashlib.sha256(original).hexdigest()
+    store = SourceDocumentStore()
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            workspace = Workspace(id=workspace_id, kind="session")
+            document = GuidelineDocument(id=document_id, workspace_id=workspace_id, source_filename="Northstar.pdf",
+                source_sha256=digest, file_size_bytes=len(original), page_count=1)
+            rule = CandidateRule(document_id=document_id, rule_text=excerpt, category="restriction", source_page=1,
+                source_start_offset=0, source_end_offset=len(excerpt), source_excerpt=excerpt, review_status="approved")
+            content = "Our guaranteed platform."
+            audit = AuditRun(id=audit_id, workspace_id=workspace_id, document_id=document_id,
+                content_sha256=hashlib.sha256(content.encode()).hexdigest(), character_count=len(content),
+                approved_rules_considered=1, supported_checks_performed=1, rules_unevaluated=0,
+                scope_limitations="[]", review_status="pending_review")
+            session.add_all([workspace, document, rule, audit]); session.flush()
+            start = content.index("guaranteed")
+            finding = AuditFinding(audit_id=audit_id, rule_id=rule.id, source_document_id=document_id,
+                source_document_sha256=digest, finding_type="restricted_phrase", status="pending_review",
+                matched_phrase="guaranteed", match_start=start, match_end=start + len("guaranteed"),
+                explanation="This literal phrase appears in an approved rule that explicitly prohibits or restricts it.",
+                suggested_correction=None, source_filename="Northstar.pdf", source_page=1,
+                source_start_offset=0, source_end_offset=len(excerpt), evidence_excerpt=excerpt,
+                verification_status="uncertain", verification_reason="source_document_not_retained",
+                verification_explanation="The exact source PDF is unavailable for independent verification.")
+            session.add(finding); session.commit()
+            original_finding_id, original_rule_id = finding.id, rule.id
+
+            def db_override():
+                yield session
+
+            app.dependency_overrides[get_guideline_db_session] = db_override
+            app.dependency_overrides[get_audit_session] = db_override
+            data = {"workspace_id": str(workspace_id)}
+            files = [("files", ("Northstar.pdf", original, "application/pdf"))]
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                wrong_copy = await client.post(f"/api/v1/audits/{audit_id}/verify-source-evidence?workspace_id={workspace_id}",
+                    json={"content": content + " changed"})
+                assert wrong_copy.status_code == 409
+                missing_source = await client.post(f"/api/v1/audits/{audit_id}/verify-source-evidence?workspace_id={workspace_id}",
+                    json={"content": content})
+                assert missing_source.status_code == 200
+                assert missing_source.json()["findings"][0]["verification_reason"] == "source_document_not_retained"
+
+                restored = await client.post("/api/v1/guidelines/ingest", data=data, files=files)
+                assert restored.status_code == 200, restored.text
+                extraction = restored.json()["results"][0]["extraction"]
+                assert restored.json()["workspace_id"] == str(workspace_id)
+                assert extraction["document_id"] == str(document_id)
+                assert extraction["retention_status"] == "restored"
+                assert session.scalar(select(func.count()).select_from(GuidelineDocument).where(
+                    GuidelineDocument.workspace_id == workspace_id)) == 1
+                assert session.scalar(select(func.count()).select_from(CandidateRule).where(
+                    CandidateRule.document_id == document_id)) == 1
+                assert store.read_verified(document) == original
+                session.commit()
+
+                duplicate_source = await client.post("/api/v1/guidelines/ingest", data=data,
+                    files=[("files", ("Northstar.pdf", original, "application/pdf"))])
+                assert duplicate_source.status_code == 200
+                assert duplicate_source.json()["results"][0]["extraction"]["document_id"] == str(document_id)
+                assert duplicate_source.json()["results"][0]["extraction"]["retention_status"] == "already_retained"
+                assert session.scalar(select(func.count()).select_from(CandidateRule).where(
+                    CandidateRule.document_id == document_id)) == 1
+                session.commit()
+
+                rechecked = await client.post(f"/api/v1/audits/{audit_id}/verify-source-evidence?workspace_id={workspace_id}",
+                    json={"content": content})
+                assert rechecked.status_code == 200, rechecked.text
+                result = rechecked.json()
+                assert result["id"] == str(audit_id)
+                saved_finding = result["findings"][0]
+                assert saved_finding["id"] == str(original_finding_id)
+                assert saved_finding["rule_id"] == str(original_rule_id)
+                assert saved_finding["source_document_id"] == str(document_id)
+                assert saved_finding["source_document_sha256"] == digest
+                assert saved_finding["verification_status"] == "verified"
+                assert result["content_sha256"] == hashlib.sha256(content.encode()).hexdigest()
+
+                # A different PDF in the same workspace is a new source version;
+                # the historical audit remains tied to its original document.
+                newer_pdf = make_pdf("New guideline version.")
+                new_upload = await client.post("/api/v1/guidelines/ingest", data=data,
+                    files=[("files", ("Northstar.pdf", newer_pdf, "application/pdf"))])
+                assert new_upload.status_code == 200, new_upload.text
+                newer_document_id = new_upload.json()["results"][0]["extraction"]["document_id"]
+                assert newer_document_id != str(document_id)
+                unchanged_history = await client.get(f"/api/v1/audits/{audit_id}?workspace_id={workspace_id}")
+                assert unchanged_history.status_code == 200
+                assert unchanged_history.json()["document_id"] == str(document_id)
+                assert unchanged_history.json()["findings"][0]["source_document_id"] == str(document_id)
+    finally:
+        app.dependency_overrides.pop(get_guideline_db_session, None)
+        app.dependency_overrides.pop(get_audit_session, None)
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+@pytest.mark.asyncio
+async def test_guideline_remove_is_workspace_scoped_and_fails_closed_without_lifecycle_column(tmp_path, monkeypatch):
+    from app.api.guidelines import get_guideline_db_session
+    from app.models import Workspace, AuditRun
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    def database_session():
+        with factory() as session:
+            yield session
+    app.dependency_overrides[get_guideline_db_session] = database_session
+    with factory() as session:
+        own_workspace, foreign_workspace = Workspace(kind="session"), Workspace(kind="session")
+        session.add_all([own_workspace, foreign_workspace]); session.flush()
+        document = GuidelineDocument(workspace_id=own_workspace.id, source_filename="preserved.pdf", source_sha256="a" * 64, file_size_bytes=100, page_count=1)
+        session.add(document); session.flush()
+        historical = AuditRun(workspace_id=own_workspace.id, document_id=document.id, content_sha256="b" * 64, character_count=1, approved_rules_considered=0, supported_checks_performed=0, rules_unevaluated=0, scope_limitations="[]", review_status="pending_review")
+        session.add(historical); session.commit()
+        document_id, workspace_id = str(document.id), str(own_workspace.id)
+        historical_id = historical.id
+        foreign_workspace_id = str(foreign_workspace.id)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            foreign = await client.post(f"/api/v1/guidelines/{document_id}/remove", params={"workspace_id": foreign_workspace_id})
+            assert foreign.status_code == 404
+            blocked = await client.post(f"/api/v1/guidelines/{document_id}/remove", params={"workspace_id": workspace_id})
+            assert blocked.status_code == 501
+        with factory() as session:
+            assert session.get(GuidelineDocument, UUID(document_id)) is not None
+            assert session.query(AuditRun).filter_by(id=historical_id).count() == 1
+    finally:
+        app.dependency_overrides.pop(get_guideline_db_session, None)
+        Base.metadata.drop_all(engine); engine.dispose()
 
 
 @pytest.mark.asyncio

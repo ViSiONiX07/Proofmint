@@ -33,7 +33,7 @@ alembic current
 alembic history
 ```
 
-The baseline revision creates guideline document metadata, pending candidate rules, imported facts, and imported terminology tables. PDF ingestion stores provenance metadata only, never PDF bytes or extracted page text. This repository does not apply migrations automatically; a reachable PostgreSQL server is required for `upgrade head`.
+The initial schema revisions created guideline document metadata, pending candidate rules, imported facts, and imported terminology tables. Current PDF ingestion retains the original bytes in the private source store while persisting provenance metadata and candidate rules; full extracted page text is not stored. This repository does not apply migrations automatically; a reachable PostgreSQL server is required for `upgrade head`.
 
 ## Candidate rules and human review
 
@@ -53,7 +53,9 @@ Only `pending_review` candidates can transition to `approved` or `rejected`; a r
 
 ## Session-scoped workspaces
 
-`POST /api/v1/guidelines/ingest` starts a fresh workspace for each successful PDF-ingestion request and returns `workspace_id` with the document outcomes. Re-uploading identical bytes starts a separate workspace. Upload multiple PDFs in one request to place them in the same workspace. The browser retains the active ID in `sessionStorage`; `GET /api/v1/workspaces/{workspace_id}` restores the workspace's documents and latest audit after refresh. Starting a new session clears the active browser state; the next PDF upload creates the next persistent workspace.
+`POST /api/v1/guidelines/ingest` starts a fresh workspace for each successful PDF-ingestion request unless an existing `workspace_id` multipart field is supplied. Existing workspaces can receive new immutable document versions. Re-uploading identical bytes to an existing workspace restores a missing source under the original document ID; matching is by exact SHA-256 and recorded size/page metadata, never filename alone. The browser retains the active ID in `sessionStorage`; `GET /api/v1/workspaces/{workspace_id}` restores the workspace's documents and latest audit after refresh. Starting a new session clears the active browser state; the next PDF upload creates the next persistent workspace.
+
+Original PDFs are stored outside the web application in a private filesystem directory. The default is `services/api/.data/source-documents`; override it with `SOURCE_DOCUMENT_STORAGE_DIR` (see `.env.example`). Objects are keyed by workspace ID, document ID, and SHA-256, written atomically, and are never exposed through a public/static URL. Do not point this at a public asset directory. Production must configure a durable, access-restricted, backed-up storage volume and define retention/access controls; the local filesystem implementation does not provide cloud object-store durability or user authentication.
 
 Every subsequent request must pass this ID: CSV imports include multipart `workspace_id`, list/review and candidate-rule APIs use a `workspace_id` query parameter, audit creation includes it in JSON, and audit retrieval, decisions, and clearance include it as a query parameter. Missing IDs fail validation; unknown or legacy IDs are not accepted as active sessions. Candidate rules inherit workspace ownership from their source document. Findings, decisions, and clearances inherit it through the audit.
 
@@ -108,3 +110,42 @@ Revision `0002_persisted_audits` adds `audit_runs`, `audit_findings`, `finding_d
 `GET /api/v1/audits/{audit_id}` retrieves the persisted run, findings, decisions, and latest clearance. `POST /api/v1/audits/{audit_id}/findings/{finding_id}/decisions` accepts `accept_suggestion`, `dismiss`, or `flag`; accepting is allowed only when a specific preferred terminology correction exists. Each action is appended to decision history. `POST /api/v1/audits/{audit_id}/clearance` accepts `cleared` or `hold`. Clearance is human-issued; a `cleared` decision is rejected while actionable findings remain pending or flagged. The stored hash binds clearance to the evaluated content fingerprint, but is not a cryptographic signature or publication gate.
 
 Audit records do not store complete submission text. Findings retain only matched phrases, offsets, short evidence excerpts and source provenance needed for review. The current service has no authentication or tenant isolation; review and clearance decisions are not attributable to an authenticated reviewer and must not be treated as production-secure.
+
+## Round 3 evidence verification, repair, and ambiguity analysis
+
+`POST /api/v1/audits` runs the deterministic matcher and then the independent verifier before persisting findings. Verification outcomes are `verified`, `uncertain`, or `rejected`; `verification_reason` is a machine-readable code and `verification_explanation` describes the check. Rule findings snapshot the exact source document ID and hash; the verifier checks workspace ownership, current rule approval, retained PDF integrity, page count, cited page-local offsets, and exact source text. Missing or inaccessible sources remain uncertain; corrupted files, invalid citations, mismatched versions, and cross-workspace references are rejected. `POST /api/v1/audits/{audit_id}/verify-source-evidence` can recheck a historical finding after source recovery, but requires the exact original audited copy (SHA-256 match); it preserves the audit, finding, rule, source-version IDs, and review decisions. Facts and terminology are verified only as literal matches to approved workspace records with stored import provenance; this does not establish semantic truth.
+
+Supported endpoints:
+
+```text
+POST /api/v1/audits
+GET  /api/v1/audits/{audit_id}?workspace_id={uuid}
+POST /api/v1/audits/{audit_id}/repair?workspace_id={uuid}
+POST /api/v1/audits/{audit_id}/verify-source-evidence?workspace_id={uuid}
+POST /api/v1/audits/{audit_id}/findings/{finding_id}/decisions?workspace_id={uuid}
+POST /api/v1/audits/{audit_id}/clearance?workspace_id={uuid}
+GET  /api/v1/ambiguity-radar?workspace_id={uuid}
+```
+
+Repair and suggestion acceptance require the exact original text, checked against the stored SHA-256. The service rechecks current approved evidence and span validity, then returns a preview only. Currently, only preferred terminology yields a supported automatic replacement. No original text is overwritten or stored, and a new audit is required for an edited revision. Acceptance records a human decision; it does not apply the text or clear the audit. Pending and flagged findings continue to block clearance.
+
+Finding decisions can include an optional `reason` (maximum 500 characters). The workspace ambiguity aggregate groups persisted decisions by currently approved rule. It returns decision, dismissal, flag, and acceptance counts, recorded reasons, dismissal rate, and an ambiguity score defined as `(dismissals + flags) / decisions`. A repeated signal requires at least three events and a score of at least 0.5. Events are not distinct reviewers; no reviewer identities or disagreement are inferred. Rules below the threshold report `insufficient_data` and a null score.
+
+The reproducible synthetic evaluation command uses a version-controlled JSON dataset and an isolated in-memory SQLite database. It does not read configured database credentials:
+
+```powershell
+python -m app.services.evaluation
+```
+
+The report computes finding precision/recall from normalized `(type, phrase, source)` signatures, evidence outcome counts and label agreement, two-run signature consistency, and safe-repair validity. Precision and recall are `null` when their denominators are zero. It is a synthetic deterministic benchmark, not a production performance estimate.
+
+### Round 3 migrations
+
+Revisions `0004_evidence_locked_findings` and `0005_verification_review_reasons` add verification fields, an allowed-outcomes constraint, review reasons, and an index for rule-linked review aggregation. Revision `0006_audit_source_version` snapshots the exact source document ID/hash on historical rule findings and prevents deleting a referenced source row. Upgrade a **local development database only** with:
+
+```powershell
+alembic upgrade head
+alembic current
+```
+
+These migrations were validated in a uniquely named temporary schema on localhost. Do not run them against production Neon without explicit authorization and a separately reviewed release plan.

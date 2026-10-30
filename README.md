@@ -2,7 +2,7 @@
 
 > **Nothing ships unproven.**
 
-Proofmint is an AI-powered brand verification workspace that validates marketing copy against approved brand guidelines and verified claim evidence prior to publication. It intercepts unsubstantiated superlatives, computes minimal surgical repairs, and enforces human-governed clearance decisions.
+Proofmint is a brand verification workspace that compares marketing copy with human-approved guideline rules, facts, and terminology before publication. Its current audit checks are deterministic and literal; findings show how their evidence was checked, and human review controls repair and clearance.
 
 ---
 
@@ -97,24 +97,36 @@ pytest
 | Feature / Area | Status | Notes |
 |---|---|---|
 | **Stitch Design System Integration** | ✅ Complete | Retrieved from Stitch projects `2233544058637253341` and `4103046008557339500`; assets in `docs/design/` |
-| **Interactive Verification Studio** | ✅ Complete | Live telemetry, clickable claim spans, and dynamic inspector |
-| **Evidence-Locked Findings** | ✅ Complete (Sample Mode) | Displays exact document anchors (`Core_SLA_Master_Annex_2024.pdf#p12`) |
-| **Intent-Preserving Repair** | ✅ Complete (Sample Mode) | Computes and displays minimal semantic token delta |
-| **Ambiguity Radar** | ✅ Complete (Sample Mode) | Multi-jurisdictional compliance grid (FTC, EU AI Act, UK CMA) |
-| **Human Clearance Terminal** | ✅ Complete (UI/Interactive) | Accept Repair, Legal Escalate, Human Override with audit receipt |
-| **Guidelines & Facts Management** | ✅ Complete (UI/Interactive) | Document ingestion simulator, candidate rules, and CSV facts preview |
+| **Interactive Verification Studio** | ✅ Implemented | Workspace-scoped PDF metadata, CSV evidence, audit review, repair preview, and clearance flows |
+| **Evidence-Locked Findings** | ✅ Implemented with explicit limits | Independent checks against the exact retained PDF version and cited page span; missing or inaccessible sources remain uncertain |
+| **Intent-Preserving Repair** | ⚠️ Deterministic subset | Minimal verified terminology substitutions with editable before/after preview; no semantic cadence model |
+| **Ambiguity Radar** | ✅ Implemented | Workspace-level decision aggregates, recorded reasons, a minimum-evidence threshold, and a disclosed score |
+| **Human Clearance** | ✅ Implemented | Decisions are persisted; pending or flagged actionable findings block clearance |
+| **Guidelines & Facts Management** | ✅ Implemented | Bounded PDF text extraction, pending candidate rules, CSV imports, and human review |
 | **Scroll-Triggered CSS Animations** | ✅ Complete | GPU-accelerated CSS reveals and Intersection Observer triggers; zero Framer Motion |
 | **Responsive Layouts** | ✅ Complete | Tested for 1440×900 (Desktop), 1280×800 (Laptop), 390×844 (Mobile) |
 | **PDF Text Extraction** | ✅ Foundation Complete | Bounded PyMuPDF ingestion with page-level text and source spans; guideline metadata is persisted, with no OCR or PDF binary storage |
-| **PostgreSQL Persistence Foundation** | ✅ Schema Ready | SQLAlchemy models, lazy session management, and Alembic baseline; configure PostgreSQL before applying migrations |
+| **PostgreSQL Persistence** | ✅ Implemented | SQLAlchemy models, lazy session management, workspace scoping, and Alembic migrations |
 | **Production LLM Engine** | ⏳ Later Phase | LLM provider agnostic interface planned for subsequent phase |
 
 ---
 
 ## 5. Security & Governance
 
-- Zero-retention cloud architecture designed for confidential enterprise copy.
-- Ephemeral in-memory verification.
-- Human review is strictly mandatory before clearance.
+- Submitted copy is not persisted by the audit API; hashes, matched spans, evidence excerpts, and review records are stored.
+- Original PDFs are retained in a private local filesystem directory outside web assets; complete extracted page text is not retained. Deployments need durable, access-restricted storage. Missing historical PDFs remain uncertain until the identical source is recovered and rechecked.
+- There is no authentication or tenant authorization in this demonstration. Workspace IDs provide logical scoping, not access control.
+- Human review remains explicit before clearance; no repair is automatically applied or published.
 
 For local PostgreSQL configuration and migration commands, see [services/api/README.md](services/api/README.md).
+
+## 6. Round 3 submission and deployments
+
+Round 3 implementation status, architecture, testing results, methodology, roadmap, and verified team attribution are documented in `docs/round-3/`.
+
+- Frontend: https://proofmint-rust.vercel.app/
+- Backend: https://proofmint-q9ss.onrender.com/
+- Swagger: https://proofmint-q9ss.onrender.com/docs
+- Health: https://proofmint-q9ss.onrender.com/api/v1/health
+
+These links identify the existing deployment. This local Round 3 work has not been published or deployed.
